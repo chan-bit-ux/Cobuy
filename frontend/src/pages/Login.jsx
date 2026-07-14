@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, ShieldAlert, CheckCircle, ChevronDown } from 'lucide-react';
 import axios from 'axios';
+import Logo from '../components/Logo';
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -128,23 +129,8 @@ const Login = ({ onLogin }) => {
         }}
       >
         {/* Brand Header */}
-        <div style={{ textAlign: 'center', marginBottom: '2.25rem' }}>
-          <span style={{
-            fontWeight: '800',
-            fontSize: '2rem',
-            color: 'var(--text-main)',
-            letterSpacing: '-0.03em',
-            display: 'block',
-            marginBottom: '0.5rem'
-          }}>
-          </span>
-          <p style={{
-            fontSize: '0.875rem',
-            color: 'var(--text-muted)',
-            fontWeight: '500'
-          }}>
-            Association Rule Mining Platform
-          </p>
+        <div style={{ textAlign: 'center', marginBottom: '2.25rem', display: 'flex', justifyContent: 'center' }}>
+          <Logo size="lg" showSubtitle={true} />
         </div>
 
         {/* Tab Selector */}

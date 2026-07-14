@@ -6,6 +6,7 @@ import os
 import json
 import math
 import tracemalloc
+import hashlib
 from mlxtend.frequent_patterns import apriori, fpgrowth, association_rules
 from mlxtend.preprocessing import TransactionEncoder
 
@@ -16,6 +17,18 @@ CORS(app)
 
 # Initialize database tables
 db.init_db()
+
+def get_current_user_email():
+    email = request.headers.get('X-User-Email')
+    if email:
+        return email.strip().lower()
+    auth = request.headers.get('Authorization', '')
+    if auth.startswith('Bearer mock-jwt-token-'):
+        return auth.replace('Bearer mock-jwt-token-', '').strip().lower()
+    email = request.args.get('user_email') or request.form.get('user_email')
+    if email:
+        return email.strip().lower()
+    return None
 
 # Storage for runtime/transient results
 data_store = {
@@ -206,6 +219,11 @@ def upload_file():
         return jsonify({'error': 'No selected file'}), 400
 
     try:
+        user_email = get_current_user_email()
+        file_content = file.read()
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        file.seek(0)
+
         if file.filename.endswith('.csv'):
             df = pd.read_csv(file)
         elif file.filename.endswith(('.xls', '.xlsx')):
@@ -221,18 +239,36 @@ def upload_file():
 
         total_tx = len(transactions)
         unique_items_count = len(set([item for sublist in transactions for item in sublist]))
+
+        existing_ds = db.get_dataset_by_hash(file_hash, user_email=user_email)
+        if existing_ds:
+            ds_id = existing_ds['id']
+            db.clear_transactions(user_email=user_email)
+            db.add_transactions(transactions, dataset_id=ds_id, user_email=user_email)
+            return jsonify({
+                'duplicate_detected': True,
+                'message': f'This file ("{existing_ds["name"]}") was already uploaded on {existing_ds.get("upload_date", "")}. Reusing existing dataset from your File History.',
+                'transaction_count': total_tx,
+                'unique_items': unique_items_count,
+                'dataset_id': ds_id,
+                'cleaning_stats': {
+                    'missing_values_removed': missing_removed,
+                    'duplicate_items_removed': duplicates_removed
+                }
+            })
+
+        # Save dataset metadata scoped to current user with SHA-256 hash
+        ds_id = db.add_dataset(file.filename, total_tx, unique_items_count, user_email=user_email, file_hash=file_hash)
         
-        # Save dataset metadata
-        ds_id = db.add_dataset(file.filename, total_tx, unique_items_count)
-        
-        # Clear previous transaction data and store new transactions
-        db.clear_transactions()
-        db.add_transactions(transactions, dataset_id=ds_id)
+        # Clear previous transaction data for this user and store new transactions
+        db.clear_transactions(user_email=user_email)
+        db.add_transactions(transactions, dataset_id=ds_id, user_email=user_email)
         
         return jsonify({
             'message': 'File cleaned and processed successfully',
             'transaction_count': total_tx,
             'unique_items': unique_items_count,
+            'dataset_id': ds_id,
             'cleaning_stats': {
                 'missing_values_removed': missing_removed,
                 'duplicate_items_removed': duplicates_removed
@@ -260,8 +296,9 @@ def mine_rules():
         min_lift = 1.0
 
     algorithm = params.get('algorithm', 'auto') # 'auto', 'apriori', or 'fpgrowth'
+    dataset_id = params.get('dataset_id') or request.args.get('dataset_id')
 
-    transactions = db.get_transactions()
+    transactions = db.get_transactions(user_email=get_current_user_email(), dataset_id=dataset_id)
     if not transactions:
         return jsonify({'error': 'No data uploaded or recorded yet'}), 400
 
@@ -405,7 +442,8 @@ def mine_rules():
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    transactions = db.get_transactions()
+    dataset_id = request.args.get('dataset_id')
+    transactions = db.get_transactions(user_email=get_current_user_email(), dataset_id=dataset_id)
     if transactions is None or len(transactions) == 0:
         return jsonify({
             'active': False,
@@ -511,13 +549,14 @@ def load_template():
         transactions, _, _ = parse_df_to_transactions(df)
 
             
-        db.clear_transactions()
+        user_email = get_current_user_email()
+        db.clear_transactions(user_email=user_email)
         # Compute unique items count
         unique_items_count = len(set([item for sublist in transactions for item in sublist]))
         total_tx = len(transactions)
-        ds_id = db.add_dataset(filename, total_tx, unique_items_count)
+        ds_id = db.add_dataset(filename, total_tx, unique_items_count, user_email=user_email)
         
-        db.add_transactions(transactions, dataset_id=ds_id)
+        db.add_transactions(transactions, dataset_id=ds_id, user_email=user_email)
         data_store['last_rules'] = None # Clear previous rules
         
         return jsonify({
@@ -530,8 +569,28 @@ def load_template():
 
 @app.route('/api/datasets', methods=['GET'])
 def get_datasets():
-    datasets = db.get_datasets()
+    user_email = get_current_user_email()
+    db.cleanup_duplicate_datasets(user_email=user_email)
+    datasets = db.get_datasets(user_email=user_email)
     return jsonify({'datasets': datasets})
+
+@app.route('/api/datasets/<int:dataset_id>', methods=['DELETE'])
+def delete_dataset_endpoint(dataset_id):
+    user_email = get_current_user_email()
+    db.delete_dataset(dataset_id, user_email=user_email)
+    return jsonify({'message': 'Dataset deleted successfully'})
+
+@app.route('/api/history/<int:dataset_id>/activate', methods=['POST'])
+@app.route('/api/datasets/<int:dataset_id>/activate', methods=['POST'])
+def activate_dataset_endpoint(dataset_id):
+    user_email = get_current_user_email()
+    dataset = db.get_dataset_by_id(dataset_id, user_email=user_email)
+    if not dataset:
+        return jsonify({'error': 'History file not found or unauthorized'}), 404
+    return jsonify({
+        'message': f"Activated historical dataset: {dataset['name']}",
+        'dataset': dataset
+    })
 
 @app.route('/api/products', methods=['GET', 'POST'])
 def manage_products():
@@ -561,7 +620,7 @@ def delete_product_endpoint(product_id):
 
 @app.route('/api/trends', methods=['GET'])
 def get_trends():
-    transactions_data = db.get_transactions_with_dates()
+    transactions_data = db.get_transactions_with_dates(user_email=get_current_user_email())
     if not transactions_data:
         return jsonify({'trends': []})
         
@@ -587,7 +646,7 @@ def run_benchmark():
     except (TypeError, ValueError):
         min_confidence = 0.5
     
-    transactions = db.get_transactions()
+    transactions = db.get_transactions(user_email=get_current_user_email())
     if not transactions or len(transactions) < 5:
         return jsonify({'error': 'Please upload a larger dataset first to run the performance benchmark (min 5 transactions).'}), 400
         
@@ -696,7 +755,7 @@ def run_benchmark():
 
 @app.route('/api/clear', methods=['POST'])
 def clear_data():
-    db.clear_transactions()
+    db.clear_transactions(user_email=get_current_user_email())
     data_store['last_rules'] = None
     return jsonify({
         'message': 'Data cleared successfully',

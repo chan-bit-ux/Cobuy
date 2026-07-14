@@ -9,6 +9,7 @@ import {
   Zap,
   Layers,
   Database,
+  History,
   Moon,
   Sun,
   Bell
@@ -20,13 +21,34 @@ import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
 import Dataset from './pages/Dataset';
 import Login from './pages/Login';
+import Logo from './components/Logo';
 import './index.css';
+import axios from 'axios';
+
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  const userStr = localStorage.getItem('user');
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user && user.email) {
+        config.headers['X-User-Email'] = user.email;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return config;
+});
 
 const Sidebar = ({ onLogout }) => {
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">
-        <span style={{ fontWeight: '800', fontSize: '1.5rem', color: 'var(--text-main)', letterSpacing: '-0.03em' }}>cobuy</span>
+      <div className="sidebar-logo" style={{ paddingBottom: '1.25rem' }}>
+        <Logo size="md" />
       </div>
 
       <nav style={{ flex: 1 }}>
@@ -42,9 +64,9 @@ const Sidebar = ({ onLogout }) => {
           <Layers size={20} />
           <span>Evaluation</span>
         </NavLink>
-        <NavLink to="/data" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <Database size={20} />
-          <span>Dataset</span>
+        <NavLink to="/history" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <History size={20} />
+          <span>History</span>
         </NavLink>
       </nav>
 
@@ -122,7 +144,8 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/evaluation" element={<Evaluation />} />
-              <Route path="/data" element={<Dataset />} />
+              <Route path="/history" element={<Dataset />} />
+              <Route path="/data" element={<Navigate to="/history" replace />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/profile" element={<Profile user={user} />} />
               <Route path="*" element={<Navigate to="/" replace />} />

@@ -127,7 +127,6 @@ pre,
   color: var(--text-muted);
   margin-bottom: 1rem;
   font-weight: 700;
-  min-height: 2.7rem; /* Prevents uneven alignment when labels wrap to 2 lines */
 }
 
 .stat-value {
@@ -136,9 +135,6 @@ pre,
   font-weight: 800;
   font-family: var(--font-mono);
   color: #fff;
-  height: 2.7rem; /* Align the baseline of text values */
-  display: flex;
-  align-items: flex-end;
 }
 
 .nav-link:hover,
@@ -196,7 +192,6 @@ pre,
   color: var(--text-muted);
   margin-bottom: 1rem;
   font-weight: 700;
-  min-height: 2.7rem; /* Prevents uneven alignment when labels wrap to 2 lines */
 }
 
 .stat-value {
@@ -204,9 +199,6 @@ pre,
   font-weight: 800;
   font-family: var(--font-mono);
   color: #fff;
-  height: 2.7rem; /* Align the baseline of text values */
-  display: flex;
-  align-items: flex-end;
 }
 
 /* Card Styling */
@@ -334,7 +326,6 @@ table {
 th {
   padding: 1.25rem 1rem;
   font-size: 0.75rem;
-  text-align: left;
 }
 
 td {
@@ -438,11 +429,11 @@ input[type=number] {
   padding: 8px 12px;
   position: absolute;
   z-index: 10;
-  bottom: calc(100% + 6px); /* Exact height above the trigger to prevent detaching */
+  bottom: 125%;
   left: 50%;
-  transform: translateX(-50%) translateY(4px); /* Starting state closer to the trigger */
+  transform: translateX(-50%);
   opacity: 0;
-  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.25s, transform 0.25s;
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.4;
@@ -478,7 +469,7 @@ input[type=number] {
 .tooltip-container:hover .tooltip-text {
   visibility: visible;
   opacity: 1;
-  transform: translateX(-50%) translateY(0); /* Smooth transition to base height where arrow tip touches */
+  transform: translateX(-50%) translateY(-4px);
 }
 
 /* Fade-in Animation */
@@ -495,4 +486,33 @@ input[type=number] {
 
 .fade-in {
   animation: fadeIn 0.25s ease-out forwards;
+}
+
+/* Scrollable Box with Custom Right-Side Scroll Indicator */
+.history-scroll-box {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  position: relative;
+}
+
+.history-scroll-box::-webkit-scrollbar {
+  width: 8px;
+}
+
+.history-scroll-box::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin: 4px 0;
+}
+
+.history-scroll-box::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.75);
+  border-radius: 8px;
+}
+
+.history-scroll-box::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color);
 }
