@@ -23,6 +23,7 @@ import {
   RotateCcw,
   Edit,
   Info,
+  HelpCircle,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
@@ -92,7 +93,11 @@ const Analytics = () => {
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showCartDesc, setShowCartDesc] = useState(() => {
     const saved = sessionStorage.getItem('show_cart_desc');
-    return saved !== 'false';
+    return saved === 'true';
+  });
+  const [showAnalysisDesc, setShowAnalysisDesc] = useState(() => {
+    const saved = sessionStorage.getItem('show_analysis_desc');
+    return saved === 'true';
   });
 
   const toggleRuleExpand = (idx) => {
@@ -369,7 +374,7 @@ const Analytics = () => {
               <Database size={16} /> Data Setup
             </h3>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: '1rem', gap: '0.5rem' }}>
               <div
                 style={{
                   border: '1px dashed var(--border-color)',
@@ -383,7 +388,6 @@ const Analytics = () => {
                   cursor: 'pointer',
                   background: file ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
                   transition: 'var(--transition)',
-                  marginBottom: '0.5rem',
                   width: '100%',
                   boxSizing: 'border-box',
                   overflow: 'hidden'
@@ -410,17 +414,25 @@ const Analytics = () => {
                 </div>
               </div>
 
+              {(uploadStatus === 'success' || stats.active) && (
+                <div style={{ color: '#10b981', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: '600', marginTop: '0.25rem' }}>
+                  <CheckCircle size={14} /> Ready to mine ({stats.total_transactions} transactions loaded)
+                </div>
+              )}
 
-              <div style={{ minHeight: '20px', marginBottom: '0.5rem' }}>
-                {(uploadStatus === 'success' || stats.active) && (
-                  <div style={{ color: '#10b981', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: '600' }}>
-                    <CheckCircle size={14} /> Ready to mine ({stats.total_transactions} transactions loaded)
-                  </div>
-                )}
-              </div>
+              {!stats.active && uploadStatus === 'idle' && (
+                <div style={{ marginTop: '0.75rem' }}>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, lineHeight: '1.4' }}>
+                    Upload your transaction dataset to get started.
+                  </p>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', margin: '0.35rem 0 0 0', lineHeight: '1.4' }}>
+                    (.csv or .xlsx)
+                  </p>
+                </div>
+              )}
 
               {uploadStatus === 'success' && cleaningStats && (
-                <div style={{ marginTop: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', padding: '0.6rem 0.75rem', borderRadius: '6px', fontSize: '0.7rem', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                <div style={{ marginTop: '0.25rem', background: 'rgba(255, 255, 255, 0.02)', padding: '0.6rem 0.75rem', borderRadius: '6px', fontSize: '0.7rem', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
                   <div style={{ fontWeight: '700', marginBottom: '0.25rem', color: '#fff' }}>Sanitization Details:</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
                     <span>Missing Rows Removed:</span>
@@ -435,30 +447,6 @@ const Analytics = () => {
             </div>
 
 
-            {!stats.active && (
-              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500', marginBottom: '0.6rem' }}>
-                  Please input first...
-                </div>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0 0 1rem 0', fontWeight: '500' }}>
-                  Upload a CSV file
-                </p>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500', marginBottom: '0.6rem' }}>
-                  Or load a sample retail template:
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem' }} onClick={() => handleLoadTemplate('convenience')}>
-                    Convenience Store Template
-                  </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem' }} onClick={() => handleLoadTemplate('pet')}>
-                    Pet Shop Template
-                  </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem' }} onClick={() => handleLoadTemplate('coffee')}>
-                    Coffee Shop Template
-                  </button>
-                </div>
-              </div>
-            )}
 
             <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Sliders size={14} style={{ color: 'var(--text-muted)' }} />
@@ -479,7 +467,7 @@ const Analytics = () => {
                 No Data (Run algorithm to view top sellers)
               </div>
             ) : stats.top_items && stats.top_items.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '360px', overflowY: 'auto', paddingRight: '4px' }}>
                 {stats.top_items.map((item, idx) => (
                   <div key={item.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -530,9 +518,9 @@ const Analytics = () => {
                       }}
                       aria-label="Toggle description"
                     >
-                      {showCartDesc ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      <HelpCircle size={16} />
                     </button>
-                    <span className="tooltip-text" style={{ width: '140px', textAlign: 'center', bottom: '135%' }}>
+                    <span className="tooltip-text" style={{ width: '140px', textAlign: 'center' }}>
                       {showCartDesc ? 'Hide Description' : 'Show Description'}
                     </span>
                   </span>
@@ -621,7 +609,36 @@ const Analytics = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <Zap size={24} style={{ color: 'var(--primary-color)' }} />
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#fff', margin: 0 }}>Analysis Insights & Recommendations</h3>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    Analysis Insights & Recommendations
+                    <span className="tooltip-container" style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '0.25rem' }}>
+                      <button
+                        onClick={() => {
+                          const nextState = !showAnalysisDesc;
+                          setShowAnalysisDesc(nextState);
+                          sessionStorage.setItem('show_analysis_desc', nextState ? 'true' : 'false');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: showAnalysisDesc ? 'var(--primary-color)' : 'var(--text-dim)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '50%',
+                          transition: 'all 0.2s ease',
+                        }}
+                        aria-label="Toggle description"
+                      >
+                        <HelpCircle size={16} />
+                      </button>
+                      <span className="tooltip-text" style={{ width: '140px', textAlign: 'center' }}>
+                        {showAnalysisDesc ? 'Hide Description' : 'Show Description'}
+                      </span>
+                    </span>
+                  </h3>
                 </div>
                 {results && (results.rules?.length > 0 || results.frequent_itemsets?.length > 0) && (
                   <button onClick={handleExportCSV} className="btn btn-secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem' }}>
@@ -631,44 +648,46 @@ const Analytics = () => {
               </div>
 
               {/* Contextual Explanation Block */}
-              {activeSubTab === 'recommendations' ? (
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '0.75rem 1rem',
-                  marginBottom: '1.25rem',
-                  fontSize: '0.8rem',
-                  color: 'var(--text-muted)',
-                  lineHeight: '1.5'
-                }}>
-                  💡 <strong>What is Confidence?</strong> Confidence tells you how likely a customer is to buy a second product if they have already decided to buy a first product.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                  <div style={{
+              {showAnalysisDesc && (
+                activeSubTab === 'recommendations' ? (
+                  <div className="fade-in" style={{
                     background: 'rgba(255, 255, 255, 0.02)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                     padding: '0.75rem 1rem',
+                    marginBottom: '1.25rem',
                     fontSize: '0.8rem',
                     color: 'var(--text-muted)',
                     lineHeight: '1.5'
                   }}>
-                    💡 <strong>What is a Frequent Itemset?</strong> A Frequent Itemset is a group of products regularly bought together in a single shopping visit.
+                    💡 <strong>What is Confidence?</strong> Confidence tells you how likely a customer is to buy a second product if they have already decided to buy a first product.
                   </div>
-                  <div style={{
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '0.75rem 1rem',
-                    fontSize: '0.8rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: '1.5'
-                  }}>
-                    💡 <strong>What is an N-Item Set?</strong> An N-item set is simply the number of products in that group (for example, a 1-item set contains single products, and a 2-item set contains pairs of products).
+                ) : (
+                  <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.8rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: '1.5'
+                    }}>
+                      💡 <strong>What is a Frequent Itemset?</strong> A Frequent Itemset is a group of products regularly bought together in a single shopping visit.
+                    </div>
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.8rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: '1.5'
+                    }}>
+                      💡 <strong>What is an N-Item Set?</strong> An N-item set is simply the number of products in that group (for example, a 1-item set contains single products, and a 2-item set contains pairs of products).
+                    </div>
                   </div>
-                </div>
+                )
               )}
 
               {/* Sub Tab Selector */}
@@ -739,7 +758,7 @@ const Analytics = () => {
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                     Association Rule
                                     <div className="tooltip-container">
-                                      <Info size={14} style={{ color: 'var(--text-dim)' }} />
+                                      <HelpCircle size={14} style={{ color: 'var(--text-dim)' }} />
                                       <span className="tooltip-text">
                                         "A → B" means customers who buy A are also likely to buy B.
                                       </span>
