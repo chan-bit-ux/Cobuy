@@ -131,7 +131,7 @@ const Dashboard = () => {
             </div>
             <div className="card stat-card">
               <div className="stat-label">Niche Engine Recommendation</div>
-              <div className="stat-value" style={{ fontSize: '1.6rem', marginTop: '0.35rem' }}>{stats.recommended_algorithm}</div>
+              <div className="stat-value" style={{ fontSize: '1.65rem' }}>{stats.recommended_algorithm}</div>
               <div className="stat-trend trend-up" style={{ fontSize: '0.7rem' }}>
                 <ArrowUpRight size={14} /> Optimal complexity selection
               </div>

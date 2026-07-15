@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  BookOpen
+  BookOpen,
+  HelpCircle
 } from 'lucide-react';
 import { 
   XAxis, 
@@ -376,20 +377,18 @@ const Evaluation = () => {
               width: '100%',
               background: 'rgba(255, 255, 255, 0.01)',
               border: 'none',
-              padding: '1.25rem 1.5rem',
+              padding: '0.75rem 1.25rem',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               cursor: 'pointer',
               color: '#fff',
               fontWeight: '700',
-              fontSize: '0.95rem'
+              fontSize: '0.9rem'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(229, 115, 77, 0.1)', color: 'var(--primary-color)', width: '28px', height: '28px', borderRadius: '6px' }}>
-                <BookOpen size={16} />
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <HelpCircle size={16} style={{ color: 'var(--primary-color)' }} />
               <span>How do these algorithms work? (The Supermarket Analogy)</span>
             </div>
             <div>

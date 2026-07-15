@@ -24,7 +24,8 @@ import {
   Edit,
   Info,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  HelpCircle
 } from 'lucide-react';
 
 import {
@@ -97,7 +98,11 @@ const Analytics = () => {
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showCartDesc, setShowCartDesc] = useState(() => {
     const saved = sessionStorage.getItem('show_cart_desc');
-    return saved !== 'false';
+    return saved === 'true';
+  });
+  const [showAnalysisDesc, setShowAnalysisDesc] = useState(() => {
+    const saved = sessionStorage.getItem('show_analysis_desc');
+    return saved === 'true';
   });
 
   const toggleRuleExpand = (idx) => {
@@ -245,28 +250,6 @@ const Analytics = () => {
     }
   };
 
-  const handleLoadTemplate = async (templateName) => {
-    setUploadStatus('uploading');
-    const fileName = `${templateName.toLowerCase().replace(' ', '_')}_store.csv`;
-    setFile({ name: fileName });
-    sessionStorage.setItem('analytics_file_name', fileName);
-    sessionStorage.removeItem('analytics_cleaning_stats');
-    try {
-      const type = templateName.toLowerCase().split(' ')[0]; // 'convenience', 'pet', 'coffee'
-      await axios.post(`${API_BASE}/load_template`, { type });
-      setUploadStatus('success');
-      setDuplicateNotice(null);
-      setCleaningStats(null);
-      fetchStats();
-      setResults(null);
-      setMiningStatus('idle');
-      sessionStorage.removeItem('analytics_results');
-    } catch (err) {
-      setUploadStatus('error');
-      sessionStorage.removeItem('analytics_file_name');
-      console.error(err);
-    }
-  };
 
 
 
@@ -360,19 +343,16 @@ const Analytics = () => {
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.6rem',
-              background: 'rgba(99, 102, 241, 0.15)',
-              border: '1px solid rgba(99, 102, 241, 0.4)',
-              padding: '0.4rem 0.85rem',
-              borderRadius: '100px',
+              gap: '0.5rem',
               fontSize: '0.8rem',
-              color: '#fff',
-              marginTop: '0.75rem',
-              fontWeight: '600'
+              color: 'var(--text-muted)',
+              marginTop: '0.5rem'
             }}>
-              <span>Analyzing Historical File: <strong style={{ color: 'var(--primary-color)' }}>{activeDatasetName}</strong></span>
-              <Link to="/history" style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textDecoration: 'underline' }}>
-                (Change in History)
+              <span>Active Dataset:</span>
+              <span className="mono" style={{ color: '#fff', fontWeight: '600' }}>{activeDatasetName}</span>
+              <span style={{ color: 'var(--text-dim)', opacity: 0.5 }}>|</span>
+              <Link to="/history" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '600' }}>
+                Change
               </Link>
             </div>
           )}
@@ -496,20 +476,6 @@ const Analytics = () => {
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0 0 1rem 0', fontWeight: '500' }}>
                   Upload a CSV file
                 </p>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500', marginBottom: '0.6rem' }}>
-                  Or load a sample retail template:
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem' }} onClick={() => handleLoadTemplate('convenience')}>
-                    Convenience Store Template
-                  </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem' }} onClick={() => handleLoadTemplate('pet')}>
-                    Pet Shop Template
-                  </button>
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.4rem' }} onClick={() => handleLoadTemplate('coffee')}>
-                    Coffee Shop Template
-                  </button>
-                </div>
               </div>
             )}
 
@@ -532,7 +498,7 @@ const Analytics = () => {
                 No Data (Run algorithm to view top sellers)
               </div>
             ) : stats.top_items && stats.top_items.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
                 {stats.top_items.map((item, idx) => (
                   <div key={item.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -583,7 +549,7 @@ const Analytics = () => {
                       }}
                       aria-label="Toggle description"
                     >
-                      {showCartDesc ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      <HelpCircle size={16} />
                     </button>
                     <span className="tooltip-text" style={{ width: '140px', textAlign: 'center', bottom: '135%' }}>
                       {showCartDesc ? 'Hide Description' : 'Show Description'}
@@ -674,7 +640,36 @@ const Analytics = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <Zap size={24} style={{ color: 'var(--primary-color)' }} />
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#fff', margin: 0 }}>Analysis Insights & Recommendations</h3>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    Analysis Insights & Recommendations
+                    <span className="tooltip-container" style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '0.25rem' }}>
+                      <button
+                        onClick={() => {
+                          const nextState = !showAnalysisDesc;
+                          setShowAnalysisDesc(nextState);
+                          sessionStorage.setItem('show_analysis_desc', nextState ? 'true' : 'false');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: showAnalysisDesc ? 'var(--primary-color)' : 'var(--text-dim)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '50%',
+                          transition: 'all 0.2s ease',
+                        }}
+                        aria-label="Toggle description"
+                      >
+                        <HelpCircle size={16} />
+                      </button>
+                      <span className="tooltip-text" style={{ width: '140px', textAlign: 'center', bottom: '135%' }}>
+                        {showAnalysisDesc ? 'Hide Description' : 'Show Description'}
+                      </span>
+                    </span>
+                  </h3>
                 </div>
                 {results && (results.rules?.length > 0 || results.frequent_itemsets?.length > 0) && (
                   <button onClick={handleExportCSV} className="btn btn-secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem' }}>
@@ -684,44 +679,46 @@ const Analytics = () => {
               </div>
 
               {/* Contextual Explanation Block */}
-              {activeSubTab === 'recommendations' ? (
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '0.75rem 1rem',
-                  marginBottom: '1.25rem',
-                  fontSize: '0.8rem',
-                  color: 'var(--text-muted)',
-                  lineHeight: '1.5'
-                }}>
-                  💡 <strong>What is Confidence?</strong> Confidence tells you how likely a customer is to buy a second product if they have already decided to buy a first product.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              {showAnalysisDesc && (
+                activeSubTab === 'recommendations' ? (
                   <div style={{
                     background: 'rgba(255, 255, 255, 0.02)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                     padding: '0.75rem 1rem',
+                    marginBottom: '1.25rem',
                     fontSize: '0.8rem',
                     color: 'var(--text-muted)',
                     lineHeight: '1.5'
                   }}>
-                    💡 <strong>What is a Frequent Itemset?</strong> A Frequent Itemset is a group of products regularly bought together in a single shopping visit.
+                    💡 <strong>What is Confidence?</strong> Confidence tells you how likely a customer is to buy a second product if they have already decided to buy a first product.
                   </div>
-                  <div style={{
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '0.75rem 1rem',
-                    fontSize: '0.8rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: '1.5'
-                  }}>
-                    💡 <strong>What is an N-Item Set?</strong> An N-item set is simply the number of products in that group (for example, a 1-item set contains single products, and a 2-item set contains pairs of products).
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.8rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: '1.5'
+                    }}>
+                      💡 <strong>What is a Frequent Itemset?</strong> A Frequent Itemset is a group of products regularly bought together in a single shopping visit.
+                    </div>
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.8rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: '1.5'
+                    }}>
+                      💡 <strong>What is an N-Item Set?</strong> An N-item set is simply the number of products in that group (for example, a 1-item set contains single products, and a 2-item set contains pairs of products).
+                    </div>
                   </div>
-                </div>
+                )
               )}
 
               {/* Sub Tab Selector */}

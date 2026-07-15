@@ -127,6 +127,7 @@ pre,
   color: var(--text-muted);
   margin-bottom: 1rem;
   font-weight: 700;
+  min-height: 2.7rem; /* Prevents uneven alignment when labels wrap to 2 lines */
 }
 
 .stat-value {
@@ -135,6 +136,9 @@ pre,
   font-weight: 800;
   font-family: var(--font-mono);
   color: #fff;
+  height: 2.7rem; /* Align the baseline of text values */
+  display: flex;
+  align-items: flex-end;
 }
 
 .nav-link:hover,
@@ -192,6 +196,7 @@ pre,
   color: var(--text-muted);
   margin-bottom: 1rem;
   font-weight: 700;
+  min-height: 2.7rem; /* Prevents uneven alignment when labels wrap to 2 lines */
 }
 
 .stat-value {
@@ -199,6 +204,9 @@ pre,
   font-weight: 800;
   font-family: var(--font-mono);
   color: #fff;
+  height: 2.7rem; /* Align the baseline of text values */
+  display: flex;
+  align-items: flex-end;
 }
 
 /* Card Styling */
@@ -326,6 +334,7 @@ table {
 th {
   padding: 1.25rem 1rem;
   font-size: 0.75rem;
+  text-align: left;
 }
 
 td {
@@ -429,11 +438,11 @@ input[type=number] {
   padding: 8px 12px;
   position: absolute;
   z-index: 10;
-  bottom: 125%;
+  bottom: calc(100% + 6px); /* Exact height above the trigger to prevent detaching */
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(4px); /* Starting state closer to the trigger */
   opacity: 0;
-  transition: opacity 0.25s, transform 0.25s;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.4;
@@ -469,7 +478,7 @@ input[type=number] {
 .tooltip-container:hover .tooltip-text {
   visibility: visible;
   opacity: 1;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translateX(-50%) translateY(0); /* Smooth transition to base height where arrow tip touches */
 }
 
 /* Fade-in Animation */
