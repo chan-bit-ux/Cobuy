@@ -78,7 +78,7 @@ const Dataset = () => {
           <div className="stat-value" style={{ fontSize: '1.8rem' }}>{datasets.length}</div>
         </div>
         <div className="card stat-card">
-          <div className="stat-label">Total Historical Transactions</div>
+          <div className="stat-label">Total Historical Purchases</div>
           <div className="stat-value" style={{ fontSize: '1.8rem' }}>{totalTransactions.toLocaleString()}</div>
         </div>
         <div className="card stat-card">

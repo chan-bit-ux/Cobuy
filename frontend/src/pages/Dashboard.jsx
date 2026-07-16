@@ -90,7 +90,7 @@ const Dashboard = () => {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 className="page-title">Market Insights</h1>
-          <p className="page-subtitle">Specialized association rule mining for your retail niche.</p>
+          <p className="page-subtitle">Specialized buying pattern finding for your retail niche.</p>
         </div>
       </div>
 
@@ -99,34 +99,34 @@ const Dashboard = () => {
           <Database size={48} style={{ color: 'var(--text-dim)', marginBottom: '1.5rem' }} />
           <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#fff', marginBottom: '0.75rem' }}>No Active Business Data Found</h3>
           <p style={{ color: 'var(--text-muted)', maxWidth: '500px', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
-            It looks like there are no transactions loaded in the system database. Head to the **Rule Mining Center** to upload your CSV receipts or load a retail template to view analytics.
+            It looks like there are no purchases loaded in the system database. Head to the **Shopping Pattern Finder** to upload your CSV receipts or load a retail template to view analytics.
           </p>
           <a href="/analytics" className="btn btn-primary" style={{ padding: '0.75rem 2rem', textDecoration: 'none' }}>
-            Go to Rule Mining Center
+            Go to Shopping Pattern Finder
           </a>
         </div>
       ) : (
         <>
           <div className="stats-grid">
             <div className="card stat-card">
-              <div className="stat-label">Total Transactions</div>
+              <div className="stat-label">Total Purchases</div>
               <div className="stat-value">{stats.total_transactions.toLocaleString()}</div>
               <div className="stat-trend trend-up" style={{ fontSize: '0.7rem' }}>
-                <ArrowUpRight size={14} /> Active Database Record
+                <ArrowUpRight size={14} /> Live Count
               </div>
             </div>
             <div className="card stat-card">
-              <div className="stat-label">Unique Products</div>
+              <div className="stat-label">Different Items Sold</div>
               <div className="stat-value">{stats.unique_items_count}</div>
               <div className="stat-trend trend-up" style={{ fontSize: '0.7rem' }}>
-                <ArrowUpRight size={14} /> Distinct SKUs mapped
+                <ArrowUpRight size={14} /> Items Tracked
               </div>
             </div>
             <div className="card stat-card">
-              <div className="stat-label">Rules Mined</div>
+              <div className="stat-label">Patterns Found</div>
               <div className="stat-value">{rules.length}</div>
               <div className="stat-trend trend-up" style={{ fontSize: '0.7rem' }}>
-                <ArrowUpRight size={14} /> At current workspace support
+                <ArrowUpRight size={14} /> Based on Your Data
               </div>
             </div>
             <div className="card stat-card">
@@ -142,7 +142,7 @@ const Dashboard = () => {
             {/* Chart 1: Transaction Frequency Trends */}
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3 style={{ fontWeight: '600' }}>Transaction Frequency Trends</h3>
+                <h3 style={{ fontWeight: '600' }}>How Busy Each Day Was</h3>
               </div>
               <div style={{ height: '300px' }}>
                 {trends.length === 0 ? (
@@ -179,7 +179,7 @@ const Dashboard = () => {
                           fontSize: '12px'
                         }}
                       />
-                      <Area type="monotone" dataKey="count" name="Transactions Count" stroke="#6366f1" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="count" name="Purchases Count" stroke="#6366f1" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
@@ -188,7 +188,7 @@ const Dashboard = () => {
 
             {/* Chart 2: Top Selling Products Share */}
             <div className="card">
-              <h3 style={{ fontWeight: '600', marginBottom: '1.5rem' }}>Top Products Distribution</h3>
+              <h3 style={{ fontWeight: '600', marginBottom: '1.5rem' }}>What People Buy Most</h3>
               <div style={{ height: '200px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -225,32 +225,32 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* High-Confidence Association Rules Table */}
+          {/* Strongest Buying Patterns Table */}
           <div className="card">
             <h3 style={{ fontWeight: '600', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Zap size={18} style={{ color: 'var(--primary-color)' }} /> Top High-Confidence Rules
+              <Zap size={18} style={{ color: 'var(--primary-color)' }} /> Strongest Buying Patterns
             </h3>
             <div className="table-container">
               {sortedRules.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  No rules meet the confidence threshold. Adjust mining parameters in the Rule Mining Center.
+                  No rules meet the confidence threshold. Adjust mining parameters in the Shopping Pattern Finder.
                 </div>
               ) : (
                 <table>
                   <thead>
                     <tr>
-                      <th>Antecedent</th>
-                      <th>Consequent</th>
-                      <th>Support</th>
-                      <th>Confidence</th>
-                      <th>Lift</th>
+                      <th>If They Buy…</th>
+                      <th>…They Also Buy</th>
+                      <th>How Common This Is</th>
+                      <th>How Likely</th>
+                      <th>How Strong the Link Is</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sortedRules.map((rule, idx) => (
                       <tr key={idx}>
-                        <td style={{ fontWeight: '600', color: '#fff' }}>{`{${rule.antecedents.join(', ')}}`}</td>
-                        <td style={{ fontWeight: '600', color: 'var(--primary-color)' }}>{`{${rule.consequents.join(', ')}}`}</td>
+                        <td style={{ fontWeight: '600', color: '#fff' }}>{rule.antecedents.join(', ')}</td>
+                        <td style={{ fontWeight: '600', color: 'var(--primary-color)' }}>{rule.consequents.join(', ')}</td>
                         <td className="mono">{(rule.support * 100).toFixed(1)}%</td>
                         <td className="mono" style={{ color: rule.confidence >= 0.7 ? '#10b981' : '#f59e0b', fontWeight: '700' }}>{(rule.confidence * 100).toFixed(1)}%</td>
                         <td className="mono" style={{ fontWeight: '600' }}>{rule.lift.toFixed(2)}x</td>

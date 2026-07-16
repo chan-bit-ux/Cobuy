@@ -156,7 +156,7 @@ def parse_df_to_transactions(df):
 def index():
     return jsonify({
         'status': 'healthy',
-        'message': 'Rule Mining System Backend API is running'
+        'message': 'Shopping Pattern Finder Backend API is running'
     })
 
 @app.route('/api/login', methods=['POST'])
@@ -345,7 +345,7 @@ def mine_rules():
                 'frequent_itemsets': [],
                 'gaps': [],
                 'metrics': metrics,
-                'message': 'No frequent itemsets found with these parameters'
+                'message': 'No common item combos found with these parameters'
             })
 
         rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)

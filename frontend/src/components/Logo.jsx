@@ -64,7 +64,7 @@ const Logo = ({ size = 'md', showSubtitle = false, className = '' }) => {
             textAlign: 'center'
           }}
         >
-          Association Rule Mining
+          Buying Pattern Mining
         </span>
       )}
     </div>

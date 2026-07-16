@@ -75,10 +75,10 @@ const Profile = ({ user }) => {
           <h3 style={{ fontWeight: '600', marginBottom: '1.5rem' }}>Recent Activity</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {[
-              { action: 'Executed FP-Growth Mining', target: 'groceries_v2.csv', time: '2 hours ago', status: 'success' },
+              { action: 'Executed FP-Growth Pattern Finding', target: 'groceries_v2.csv', time: '2 hours ago', status: 'success' },
               { action: 'Exported Analytics Report', target: 'Monthly Analysis.pdf', time: '5 hours ago', status: 'success' },
               { action: 'Uploaded New Dataset', target: 'sales_q2_2026.xlsx', time: '1 day ago', status: 'success' },
-              { action: 'Changed Mining Parameters', target: 'Min Support: 0.05', time: '2 days ago', status: 'info' },
+              { action: 'Changed Pattern Finding Parameters', target: 'Min How Common This Is: 0.05', time: '2 days ago', status: 'info' },
               { action: 'Login from new device', target: 'Chrome on Windows', time: '3 days ago', status: 'warning' },
             ].map((item, idx) => (
               <div key={idx} style={{ 

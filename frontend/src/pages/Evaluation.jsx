@@ -408,8 +408,8 @@ const Evaluation = () => {
               <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '1rem' }}>
                 <h5 style={{ color: '#10b981', fontWeight: '700', marginBottom: '0.25rem', fontSize: '0.95rem' }}>🌳 FP-Growth (Frequent Pattern): The Catalog Mapper</h5>
                 <p style={{ margin: 0 }}>
-                  FP-Growth reads all transactions just twice. On the first pass, it counts item frequencies. On the second pass, it builds a highly compressed tree map of the items in memory (called an FP-Tree). 
-                  It is like a shopper who reads the store catalog once at home, creates a digital blueprint of the store layout, and navigates straight to the paths containing frequent itemsets without ever scanning the store repeatedly. This makes it massive amounts faster for large or dense transaction data.
+                  FP-Growth reads all purchases just twice. On the first pass, it counts item frequencies. On the second pass, it builds a highly compressed tree map of the items in memory (called an FP-Tree). 
+                  It is like a shopper who reads the store catalog once at home, creates a digital blueprint of the store layout, and navigates straight to the paths containing common item combos without ever scanning the store repeatedly. This makes it massive amounts faster for large or dense purchase data.
                 </p>
               </div>
             </div>
@@ -540,7 +540,7 @@ const Evaluation = () => {
           <h1 className="page-title">Algorithm Evaluation</h1>
           <p className="page-subtitle">
             Benchmark Apriori vs FP-Growth using a Paired T-Test across 20 iterations 
-            (using Min Support: {(params.min_support * 100).toFixed(0)}%, Min Confidence: {(params.min_confidence * 100).toFixed(0)}%).
+            (using Min How Common This Is: {(params.min_support * 100).toFixed(0)}%, Min How Likely: {(params.min_confidence * 100).toFixed(0)}%).
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
@@ -592,7 +592,7 @@ const Evaluation = () => {
             <Activity size={48} style={{ color: 'var(--text-dim)', marginBottom: '0.5rem' }} />
             <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#fff', marginBottom: '0.5rem' }}>No Benchmark Run Yet</h3>
             <p style={{ color: 'var(--text-muted)', maxWidth: '450px', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '1rem' }}>
-              Run a paired t-test benchmark comparing Apriori and FP-Growth performance on your active dataset. The evaluation uses the parameters configured in System Settings (Min Support: {(params.min_support * 100).toFixed(0)}%, Min Confidence: {(params.min_confidence * 100).toFixed(0)}%).
+              Run a paired t-test benchmark comparing Apriori and FP-Growth performance on your active dataset. The evaluation uses the parameters configured in System Settings (Min How Common This Is: {(params.min_support * 100).toFixed(0)}%, Min How Likely: {(params.min_confidence * 100).toFixed(0)}%).
             </p>
             <button 
               className="btn btn-primary" 

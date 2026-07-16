@@ -138,16 +138,16 @@ const Analytics = () => {
     }
 
     csvContent += "=== SUMMARY STATISTICS & PARAMETERS ===\n";
-    csvContent += `Total Transactions,${stats.total_transactions || 0}\n`;
-    csvContent += `Unique Items Count,${stats.unique_items_count || 0}\n`;
+    csvContent += `Total Purchases,${stats.total_transactions || 0}\n`;
+    csvContent += `Different Items Sold Count,${stats.unique_items_count || 0}\n`;
     csvContent += `Algorithm Used,${actualAlgo}\n`;
-    csvContent += `Min Support Threshold,${params.min_support}\n`;
-    csvContent += `Min Confidence Threshold,${params.min_confidence}\n`;
-    csvContent += `Min Lift Threshold,${params.min_lift}\n\n`;
+    csvContent += `Min How Common This Is Threshold,${params.min_support}\n`;
+    csvContent += `Min How Likely Threshold,${params.min_confidence}\n`;
+    csvContent += `Min How Strong the Link Is Threshold,${params.min_lift}\n\n`;
 
     // 2. Frequent Itemsets Section
-    csvContent += "=== FREQUENT ITEMSETS ===\n";
-    csvContent += "Frequent Itemset,Qty,N-Item Size,Support\n";
+    csvContent += "=== COMMON ITEM COMBOS ===\n";
+    csvContent += "Common Item Combos,Qty,N-Item Size,How Common This Is\n";
     if (results.frequent_itemsets && results.frequent_itemsets.length > 0) {
       results.frequent_itemsets.forEach(set => {
         const itemsStr = `"${set.items.join(', ')}"`;
@@ -157,13 +157,13 @@ const Analytics = () => {
         csvContent += `${itemsStr},${qty},${size},${supportPct}\n`;
       });
     } else {
-      csvContent += "No frequent itemsets found,,,\n";
+      csvContent += "No common item combos found,,,\n";
     }
     csvContent += "\n";
 
     // 3. Association Rules / Recommendations Section
-    csvContent += "=== ASSOCIATION RULES (RECOMMENDATIONS) ===\n";
-    csvContent += "Frequently Bought Together,Association Rule,Confidence,Lift,Recommendation\n";
+    csvContent += "=== BUYING PATTERNS (RECOMMENDATIONS) ===\n";
+    csvContent += "Frequently Bought Together,Buying Pattern,How Likely,How Strong the Link Is,Suggested Action\n";
     if (results.rules && results.rules.length > 0) {
       results.rules.forEach(rule => {
         const fbt = `"${[...rule.antecedents, ...rule.consequents].join(' + ')}"`;
@@ -180,14 +180,14 @@ const Analytics = () => {
         csvContent += `${fbt},${associationRuleStr},${confidencePct},${liftValue},"${action}"\n`;
       });
     } else {
-      csvContent += "No association rules were found,,,,,\n";
+      csvContent += "No buying patterns were found,,,,,\n";
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `rule_mining_complete_report.csv`);
+    link.setAttribute("download", `shopping_pattern_complete_report.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -337,8 +337,8 @@ const Analytics = () => {
     <div className="fade-in">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
-          <h1 className="page-title">Rule Mining Center</h1>
-          <p className="page-subtitle">Configure parameters, view product frequencies, and generate association rules.</p>
+          <h1 className="page-title">Shopping Pattern Finder</h1>
+          <p className="page-subtitle">Configure parameters, view product frequencies, and generate buying patterns.</p>
           {datasetId && activeDatasetName && (
             <div style={{
               display: 'inline-flex',
@@ -523,11 +523,11 @@ const Analytics = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1 }}>
 
           <>
-            {/* Customer Cart Insights */}
+            {/* What's In Customers' Carts */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: '250px', maxHeight: '360px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                  <Database size={18} style={{ color: 'var(--primary-color)' }} /> Customer Cart Insights
+                  <Database size={18} style={{ color: 'var(--primary-color)' }} /> What's In Customers' Carts
                   <span className="tooltip-container" style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '0.25rem' }}>
                     <button
                       onClick={() => {
@@ -557,7 +557,7 @@ const Analytics = () => {
                   </span>
                 </h3>
                 <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  Items: {stats.unique_items_count} | Transactions: {stats.total_transactions}
+                  Items: {stats.unique_items_count} | Purchases: {stats.total_transactions}
                 </span>
               </div>
 
@@ -575,7 +575,7 @@ const Analytics = () => {
                     lineHeight: '1.4'
                   }}
                 >
-                  💡 <strong>What is % of Total Carts?</strong> This shows how often a product makes it into a customer's shopping cart.
+                  💡 <strong>What is How Often Bought?</strong> This shows how often a product makes it into a customer's shopping cart.
                 </div>
               )}
 
@@ -606,7 +606,7 @@ const Analytics = () => {
               }}>
                 {!results ? (
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1.5rem', fontStyle: 'italic' }}>
-                    No Data (Run algorithm to view customer cart insights)
+                    No Data (Run algorithm to view what's in customers' carts)
                   </div>
                 ) : filteredItems.length === 0 ? (
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '130px', padding: '1.5rem', textAlign: 'center' }}>
@@ -617,7 +617,7 @@ const Analytics = () => {
                     <thead>
                       <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-color)' }}>
                         <th style={{ textAlign: 'left', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>Product Name</th>
-                        <th style={{ textAlign: 'right', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>% of Total Carts</th>
+                        <th style={{ textAlign: 'right', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>How Often Bought</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -641,7 +641,7 @@ const Analytics = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <Zap size={24} style={{ color: 'var(--primary-color)' }} />
                   <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    Analysis Insights & Recommendations
+                    What This Means & What To Do
                     <span className="tooltip-container" style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '0.25rem' }}>
                       <button
                         onClick={() => {
@@ -691,7 +691,7 @@ const Analytics = () => {
                     color: 'var(--text-muted)',
                     lineHeight: '1.5'
                   }}>
-                    💡 <strong>What is Confidence?</strong> Confidence tells you how likely a customer is to buy a second product if they have already decided to buy a first product.
+                    💡 <strong>What is How Likely?</strong> How Likely tells you how likely a customer is to buy a second product if they have already decided to buy a first product.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
@@ -704,7 +704,7 @@ const Analytics = () => {
                       color: 'var(--text-muted)',
                       lineHeight: '1.5'
                     }}>
-                      💡 <strong>What is a Frequent Itemset?</strong> A Frequent Itemset is a group of products regularly bought together in a single shopping visit.
+                      💡 <strong>What is a Common Item Combo?</strong> A Common Item Combo is a group of products regularly bought together in a single shopping visit.
                     </div>
                     <div style={{
                       background: 'rgba(255, 255, 255, 0.02)',
@@ -753,7 +753,7 @@ const Analytics = () => {
                     outline: 'none'
                   }}
                 >
-                  Frequent Itemsets ({results?.frequent_itemsets?.length || 0})
+                  Common Item Combos ({results?.frequent_itemsets?.length || 0})
                 </button>
               </div>
 
@@ -787,7 +787,7 @@ const Analytics = () => {
                                 <th style={{ textAlign: 'left', padding: '1rem', fontWeight: '600', color: 'var(--text-muted)', width: '20%' }}>Frequently Bought Together</th>
                                 <th style={{ textAlign: 'left', padding: '1rem', fontWeight: '600', color: 'var(--text-muted)', width: '20%' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                    Association Rule
+                                    Buying Pattern
                                     <div className="tooltip-container">
                                       <Info size={14} style={{ color: 'var(--text-dim)' }} />
                                       <span className="tooltip-text">
@@ -796,9 +796,9 @@ const Analytics = () => {
                                     </div>
                                   </div>
                                 </th>
-                                <th style={{ textAlign: 'center', padding: '1rem', fontWeight: '600', color: 'var(--text-muted)', width: '15%' }}>Confidence</th>
+                                <th style={{ textAlign: 'center', padding: '1rem', fontWeight: '600', color: 'var(--text-muted)', width: '15%' }}>How Likely</th>
                                 <th style={{ textAlign: 'left', padding: '1rem', fontWeight: '600', color: 'var(--text-muted)', width: '25%' }}>Explanation & Details</th>
-                                <th style={{ textAlign: 'left', padding: '1rem', fontWeight: '600', color: 'var(--text-muted)', width: '20%' }}>Strategic Action</th>
+                                <th style={{ textAlign: 'left', padding: '1rem', fontWeight: '600', color: 'var(--text-muted)', width: '20%' }}>Suggested Action</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -893,7 +893,7 @@ const Analytics = () => {
                                           color: 'var(--text-muted)',
                                           lineHeight: '1.4'
                                         }}>
-                                          <strong style={{ color: '#fff' }}>Lift: {rule.lift.toFixed(2)}</strong>
+                                          <strong style={{ color: '#fff' }}>How Strong the Link Is: {rule.lift.toFixed(2)}</strong>
                                           <div style={{ marginTop: '0.2rem' }}>
                                             Customers buy these products together {rule.lift.toFixed(2)} times more often than expected.
                                           </div>
@@ -923,7 +923,7 @@ const Analytics = () => {
                             <Database size={28} style={{ color: 'var(--text-dim)', marginBottom: '1rem' }} />
                             <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.5rem' }}>No Product Recommendations Found</h4>
                             <p style={{ color: 'var(--text-muted)', maxWidth: '400px', fontSize: '0.85rem' }}>
-                              No association rules were found. Try increasing the number of transactions or lowering the minimum support/confidence.
+                              No buying patterns were found. Try increasing the number of purchases or lowering the minimum how common this is / how likely threshold.
                             </p>
                           </div>
                         )}
@@ -970,7 +970,7 @@ const Analytics = () => {
                                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                                     <thead>
                                       <tr style={{ background: 'rgba(255, 255, 255, 0.01)', borderBottom: '1px solid var(--border-color)' }}>
-                                        <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: '600', color: 'var(--text-muted)' }}>Frequent Itemset</th>
+                                        <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: '600', color: 'var(--text-muted)' }}>Common Item Combo</th>
                                         <th style={{ textAlign: 'right', padding: '0.75rem 1rem', fontWeight: '600', color: 'var(--text-muted)' }}>Qty</th>
                                       </tr>
                                     </thead>
@@ -1003,9 +1003,9 @@ const Analytics = () => {
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '3rem', textAlign: 'center' }}>
                             <Database size={28} style={{ color: 'var(--text-dim)', marginBottom: '1rem' }} />
-                            <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.5rem' }}>No Frequent Itemsets Found</h4>
+                            <h4 style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '0.5rem' }}>No Common Item Combos Found</h4>
                             <p style={{ color: 'var(--text-muted)', maxWidth: '400px', fontSize: '0.85rem' }}>
-                              Adjust your Minimum Support threshold lower to capture frequent combinations.
+                              Adjust your Minimum How Common This Is threshold lower to capture common item combos.
                             </p>
                           </div>
                         )}

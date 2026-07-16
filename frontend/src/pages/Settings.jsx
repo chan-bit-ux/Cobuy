@@ -107,11 +107,11 @@ const Settings = () => {
           </div>
 
           <div style={{ borderTop: '1px solid var(--border-color)', margin: '2rem 0', paddingTop: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1.25rem', color: 'var(--primary-color)' }}>Association Rule Mining Defaults</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1.25rem', color: 'var(--primary-color)' }}>Buying Pattern Mining Defaults</h3>
             
             <div className="form-group" style={{ marginBottom: '1.5rem' }}>
               <label className="label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                <span>Minimum Support (Min Support):</span>
+                <span>Minimum How Common This Is (Min How Common This Is):</span>
                 <span className="mono" style={{ fontWeight: '700', color: 'var(--primary-color)' }}>
                   {(params.min_support * 100).toFixed(1)}%
                 </span>
@@ -134,7 +134,7 @@ const Settings = () => {
 
             <div className="form-group" style={{ marginBottom: '1.5rem' }}>
               <label className="label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                <span>Minimum Confidence (Min Confidence):</span>
+                <span>Minimum How Likely (Min How Likely):</span>
                 <span className="mono" style={{ fontWeight: '700', color: 'var(--primary-color)' }}>
                   {(params.min_confidence * 100).toFixed(0)}%
                 </span>
@@ -152,12 +152,12 @@ const Settings = () => {
                   cursor: 'pointer'
                 }}
               />
-              <p className="help-text">Filters out rules where the probability of purchasing the consequent item(s) given the antecedent item(s) is lower than this threshold.</p>
+              <p className="help-text">Filters out buying patterns where the probability of purchasing the "…They Also Buy" item(s) given the "If They Buy…" item(s) is lower than this threshold.</p>
             </div>
 
             <div className="form-group" style={{ marginBottom: '1.5rem' }}>
               <label className="label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                <span>Minimum Lift (Min Lift):</span>
+                <span>Minimum How Strong the Link Is (Min How Strong the Link Is):</span>
                 <span className="mono" style={{ fontWeight: '700', color: 'var(--primary-color)' }}>
                   {(!isNaN(parseFloat(params.min_lift)) ? parseFloat(params.min_lift) : 1.0).toFixed(1)}
                 </span>
@@ -183,7 +183,7 @@ const Settings = () => {
                   backgroundColor: '#141414'
                 }}
               />
-              <p className="help-text">Filters out rules where the items have low strength of association (Lift &gt; 1.0 means items are bought together more often than expected by random chance).</p>
+              <p className="help-text">Filters out buying patterns where the items have low strength of association (How Strong the Link Is &gt; 1.0 means items are bought together more often than expected by random chance).</p>
             </div>
 
             <div className="form-group" style={{ marginBottom: '1.5rem' }}>
