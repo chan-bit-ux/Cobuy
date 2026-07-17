@@ -339,23 +339,6 @@ const Analytics = () => {
         <div>
           <h1 className="page-title">Shopping Pattern Finder</h1>
           <p className="page-subtitle">Configure parameters, view product frequencies, and generate buying patterns.</p>
-          {datasetId && activeDatasetName && (
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.8rem',
-              color: 'var(--text-muted)',
-              marginTop: '0.5rem'
-            }}>
-              <span>Active Dataset:</span>
-              <span className="mono" style={{ color: '#fff', fontWeight: '600' }}>{activeDatasetName}</span>
-              <span style={{ color: 'var(--text-dim)', opacity: 0.5 }}>|</span>
-              <Link to="/history" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '600' }}>
-                Change
-              </Link>
-            </div>
-          )}
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           {stats.active && (
@@ -387,6 +370,30 @@ const Analytics = () => {
             <h3 style={{ fontSize: '0.9rem', fontWeight: '700', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Database size={16} /> Data Setup
             </h3>
+
+            {datasetId && activeDatasetName && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.75rem 0.85rem',
+                background: 'rgba(99, 102, 241, 0.04)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                marginBottom: '1.25rem',
+                fontSize: '0.8rem'
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', overflow: 'hidden', marginRight: '0.5rem' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Dataset</span>
+                  <span className="mono" style={{ color: '#fff', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={activeDatasetName}>
+                    {activeDatasetName}
+                  </span>
+                </div>
+                <Link to="/history" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '600', fontSize: '0.75rem', flexShrink: 0 }}>
+                  Change
+                </Link>
+              </div>
+            )}
 
             <div className="form-group">
               <div

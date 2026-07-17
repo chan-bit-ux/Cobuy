@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { 
   Shield, 
-  Bell, 
   Globe, 
   Database,
   Sliders,
@@ -48,16 +47,13 @@ const Settings = () => {
     <div className="fade-in">
       <div className="page-header">
         <h1 className="page-title">System Settings</h1>
-        <p className="page-subtitle">Manage mining parameters, notifications, and application preferences.</p>
+        <p className="page-subtitle">Manage mining parameters and application preferences.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
         <div className="card" style={{ height: 'fit-content' }}>
           <div className="nav-link active" style={{ marginBottom: '0.5rem' }}>
             <Sliders size={20} /> General Preferences
-          </div>
-          <div className="nav-link" style={{ marginBottom: '0.5rem' }}>
-            <Bell size={20} /> Notifications
           </div>
           <div className="nav-link" style={{ marginBottom: '0.5rem' }}>
             <Shield size={20} /> Security & Privacy

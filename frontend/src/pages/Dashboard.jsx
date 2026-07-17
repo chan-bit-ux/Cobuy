@@ -107,33 +107,26 @@ const Dashboard = () => {
         </div>
       ) : (
         <>
-          <div className="stats-grid">
+          <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
             <div className="card stat-card">
               <div className="stat-label">Total Purchases</div>
               <div className="stat-value">{stats.total_transactions.toLocaleString()}</div>
-              <div className="stat-trend trend-up" style={{ fontSize: '0.7rem' }}>
-                <ArrowUpRight size={14} /> Live Count
+              <div className="stat-trend trend-up" style={{ fontSize: '0.85rem' }}>
+                <ArrowUpRight size={16} /> Live Count
               </div>
             </div>
             <div className="card stat-card">
               <div className="stat-label">Different Items Sold</div>
               <div className="stat-value">{stats.unique_items_count}</div>
-              <div className="stat-trend trend-up" style={{ fontSize: '0.7rem' }}>
-                <ArrowUpRight size={14} /> Items Tracked
+              <div className="stat-trend trend-up" style={{ fontSize: '0.85rem' }}>
+                <ArrowUpRight size={16} /> Items Tracked
               </div>
             </div>
             <div className="card stat-card">
               <div className="stat-label">Patterns Found</div>
               <div className="stat-value">{rules.length}</div>
-              <div className="stat-trend trend-up" style={{ fontSize: '0.7rem' }}>
-                <ArrowUpRight size={14} /> Based on Your Data
-              </div>
-            </div>
-            <div className="card stat-card">
-              <div className="stat-label">Niche Engine Recommendation</div>
-              <div className="stat-value" style={{ fontSize: '1.65rem' }}>{stats.recommended_algorithm}</div>
-              <div className="stat-trend trend-up" style={{ fontSize: '0.7rem' }}>
-                <ArrowUpRight size={14} /> Optimal complexity selection
+              <div className="stat-trend trend-up" style={{ fontSize: '0.85rem' }}>
+                <ArrowUpRight size={16} /> Based on Your Data
               </div>
             </div>
           </div>
@@ -151,7 +144,7 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trends}>
+                    <AreaChart data={trends} margin={{ top: 10, right: 25, left: -10, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
@@ -164,6 +157,17 @@ const Dashboard = () => {
                         axisLine={false}
                         tickLine={false}
                         tick={{ fill: 'var(--text-muted)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                        padding={{ left: 15, right: 15 }}
+                        tickFormatter={(str) => {
+                          if (!str || typeof str !== 'string') return str;
+                          const parts = str.split('-');
+                          if (parts.length !== 3) return str;
+                          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                          const monthIdx = parseInt(parts[1], 10) - 1;
+                          const month = months[monthIdx] || parts[1];
+                          const day = parts[2];
+                          return `${month} ${day}`;
+                        }}
                       />
                       <YAxis
                         axisLine={false}
@@ -186,42 +190,61 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Chart 2: Top Selling Products Share */}
+            {/* Chart 2: Top Selling Products */}
             <div className="card">
-              <h3 style={{ fontWeight: '600', marginBottom: '1.5rem' }}>What People Buy Most</h3>
-              <div style={{ height: '200px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={65}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={{ marginTop: '1rem', maxHeight: '120px', overflowY: 'auto' }}>
-                {pieData.map((item, index) => (
-                  <div key={item.name} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: COLORS[index % COLORS.length] }}></div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{item.name}</span>
-                    </div>
-                    <span style={{ fontWeight: '500', fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
-                      {totalItemCount > 0 ? `${Math.round((item.value / totalItemCount) * 100)}%` : '0%'}
-                    </span>
+              <h3 style={{ fontWeight: '600', marginBottom: '1rem' }}>What People Buy Most</h3>
+              {pieData.length === 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  No products sold yet.
+                </div>
+              ) : (
+                <>
+                  <div style={{ height: '180px', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.5rem 0' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={65}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'var(--card-bg)',
+                            borderColor: 'var(--border-color)',
+                            borderRadius: '8px',
+                            color: 'var(--text-main)',
+                            fontSize: '12px'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
-                ))}
-              </div>
+                  <div style={{ marginTop: '0.75rem', maxHeight: '110px', overflowY: 'auto', paddingRight: '4px' }}>
+                    {pieData.map((item, index) => (
+                      <div key={item.name} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[index % COLORS.length] }}></div>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{item.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.8rem' }}>
+                          <span style={{ color: '#fff', fontWeight: '600', fontFamily: 'var(--font-mono)' }}>{item.value}</span>
+                          <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                            ({totalItemCount > 0 ? `${Math.round((item.value / totalItemCount) * 100)}%` : '0%'})
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
