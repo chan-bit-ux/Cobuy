@@ -265,6 +265,8 @@ const Analytics = () => {
       sessionStorage.removeItem('analytics_file_name');
       sessionStorage.removeItem('analytics_cleaning_stats');
       sessionStorage.removeItem('analytics_results');
+      localStorage.removeItem('activeDatasetId');
+      localStorage.removeItem('activeDatasetName');
       setStats({
         active: false,
         total_transactions: 0,
@@ -445,16 +447,22 @@ const Analytics = () => {
                 )}
                 {duplicateNotice && (
                   <div style={{
-                    marginTop: '0.5rem',
-                    background: 'rgba(245, 158, 11, 0.15)',
-                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    marginTop: '0.75rem',
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
                     color: '#fbbf24',
-                    padding: '0.5rem 0.65rem',
-                    borderRadius: '6px',
-                    fontSize: '0.72rem',
-                    lineHeight: '1.4'
+                    padding: '0.75rem 1rem',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                    lineHeight: '1.5',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.6rem'
                   }}>
-                    <strong>Reuse Detected:</strong> {duplicateNotice}
+                    <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#fbbf24' }} />
+                    <div>
+                      <strong>File Already in History:</strong> {duplicateNotice}
+                    </div>
                   </div>
                 )}
               </div>

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  Cpu, 
-  Clock, 
-  Activity, 
+import {
+  Cpu,
+  Clock,
+  Activity,
   Zap,
   Info,
   RefreshCw,
@@ -15,11 +15,11 @@ import {
   BookOpen,
   HelpCircle
 } from 'lucide-react';
-import { 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   Legend,
   LineChart,
@@ -75,10 +75,11 @@ const Evaluation = () => {
         };
         setParams(currentParams);
       }
-      
+
       const payload = {
         min_support: parseFloat(currentParams.min_support) || 0.05,
-        min_confidence: parseFloat(currentParams.min_confidence) || 0.5
+        min_confidence: parseFloat(currentParams.min_confidence) || 0.5,
+        dataset_id: localStorage.getItem('activeDatasetId') || null
       };
       const response = await axios.post(`${API_BASE}/benchmark`, payload);
       setResults(response.data);
@@ -122,19 +123,19 @@ const Evaluation = () => {
 
   const renderVerdictCard = (res) => {
     const isFpTimeWinner = res.fpgrowth.avg_time < res.apriori.avg_time;
-    const speedRatio = isFpTimeWinner 
+    const speedRatio = isFpTimeWinner
       ? (res.apriori.avg_time / Math.max(res.fpgrowth.avg_time, 0.0001))
       : (res.fpgrowth.avg_time / Math.max(res.apriori.avg_time, 0.0001));
     const speedupText = speedRatio.toFixed(1) + "x faster";
-    
+
     const isFpMemWinner = res.fpgrowth.avg_mem < res.apriori.avg_mem;
     const memSavingsRatio = isFpMemWinner
       ? (((res.apriori.avg_mem - res.fpgrowth.avg_mem) / Math.max(res.apriori.avg_mem, 0.0001)) * 100)
       : (((res.fpgrowth.avg_mem - res.apriori.avg_mem) / Math.max(res.fpgrowth.avg_mem, 0.0001)) * 100);
     const memSavingsText = memSavingsRatio.toFixed(0) + "% less memory";
-    
+
     const isSignificant = res.t_test_time.is_significant;
-    
+
     let title = "";
     let color = "";
     let bg = "";
@@ -142,13 +143,13 @@ const Evaluation = () => {
 
     if (isFpTimeWinner && isSignificant) {
       title = "FP-Growth is the highly recommended algorithm!";
-      color = "#10b981"; 
+      color = "#10b981";
       bg = "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(99, 102, 241, 0.04) 100%)";
       const memClause = isFpMemWinner ? `and uses ${memSavingsText}` : `with similar memory footprint`;
       desc = `FP-Growth is consistently faster by ${speedupText} ${memClause} than Apriori. The statistical analysis confirms this performance gap is a 100% verified result and will scale smoothly as your transaction volume grows.`;
     } else if (!isSignificant) {
       title = "Both algorithms performed similarly.";
-      color = "#f59e0b"; 
+      color = "#f59e0b";
       bg = "linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(229, 115, 77, 0.04) 100%)";
       desc = `While FP-Growth averaged a slight lead, the speed difference is not statistically consistent at your current database size. For larger data volumes, FP-Growth is still theoretically preferred due to its memory efficiency.`;
     } else {
@@ -160,13 +161,13 @@ const Evaluation = () => {
     }
 
     return (
-      <div className="card" style={{ 
-        background: bg, 
-        borderColor: `rgba(${color === '#10b981' ? '16, 185, 129' : '245, 158, 11'}, 0.2)`, 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <div className="card" style={{
+        background: bg,
+        borderColor: `rgba(${color === '#10b981' ? '16, 185, 129' : '245, 158, 11'}, 0.2)`,
+        display: 'flex',
+        flexDirection: 'column',
         gap: '0.75rem',
-        padding: '1.5rem' 
+        padding: '1.5rem'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span style={{ fontSize: '1.5rem' }}>🏆</span>
@@ -183,10 +184,10 @@ const Evaluation = () => {
 
   const renderStatsGrid = (res) => {
     const isFpTimeWinner = res.fpgrowth.avg_time < res.apriori.avg_time;
-    const speedRatio = isFpTimeWinner 
+    const speedRatio = isFpTimeWinner
       ? (res.apriori.avg_time / Math.max(res.fpgrowth.avg_time, 0.0001))
       : (res.fpgrowth.avg_time / Math.max(res.apriori.avg_time, 0.0001));
-      
+
     const isFpMemWinner = res.fpgrowth.avg_mem < res.apriori.avg_mem;
     const memSavingsRatio = isFpMemWinner
       ? (((res.apriori.avg_mem - res.fpgrowth.avg_mem) / Math.max(res.apriori.avg_mem, 0.0001)) * 100)
@@ -315,7 +316,7 @@ const Evaluation = () => {
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Comparison of processing speed</span>
               </div>
             </div>
-            
+
             <div style={{ display: 'flex', alignItems: 'center' }}>
               {isTimeSignificant ? (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '700' }}>
@@ -329,7 +330,7 @@ const Evaluation = () => {
             </div>
 
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.6', margin: 0 }}>
-              {isTimeSignificant 
+              {isTimeSignificant
                 ? `FP-Growth completed runs faster than Apriori with high statistical consistency. The test confirms there is less than a 5% probability that this speedup was a random fluke. You can expect FP-Growth to scale much better as your dataset grows.`
                 : `The speed difference between Apriori and FP-Growth is too small to be statistically consistent. This means the speed gap could be caused by normal background activity on your computer. Both algorithms run equally well for this specific workload.`
               }
@@ -347,7 +348,7 @@ const Evaluation = () => {
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Comparison of system memory consumed</span>
               </div>
             </div>
-            
+
             <div style={{ display: 'flex', alignItems: 'center' }}>
               {isMemSignificant ? (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '700' }}>
@@ -371,7 +372,7 @@ const Evaluation = () => {
 
         {/* Shopping Analogy Accordion */}
         <div className="card" style={{ border: '1px solid var(--border-color)', padding: 0, overflow: 'hidden' }}>
-          <button 
+          <button
             onClick={() => setIsAnalogyOpen(!isAnalogyOpen)}
             style={{
               width: '100%',
@@ -401,14 +402,14 @@ const Evaluation = () => {
               <div>
                 <h5 style={{ color: '#6366f1', fontWeight: '700', marginBottom: '0.25rem', fontSize: '0.95rem' }}>🛒 Apriori: The Multi-Pass Shopper</h5>
                 <p style={{ margin: 0 }}>
-                  Apriori stands for "prior knowledge". It operates in iterative steps: first it finds popular single items, then combines them into pairs and rescans the database, then combines those into triples and rescans the database again. 
+                  Apriori stands for "prior knowledge". It operates in iterative steps: first it finds popular single items, then combines them into pairs and rescans the database, then combines those into triples and rescans the database again.
                   It is like a supermarket shopper who walks down every aisle of the store, goes home, thinks of combination items, walks down every aisle again, and repeats this process 5 or 10 times. It becomes very slow as transactions increase because of the repeated database scans.
                 </p>
               </div>
               <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '1rem' }}>
                 <h5 style={{ color: '#10b981', fontWeight: '700', marginBottom: '0.25rem', fontSize: '0.95rem' }}>🌳 FP-Growth (Frequent Pattern): The Catalog Mapper</h5>
                 <p style={{ margin: 0 }}>
-                  FP-Growth reads all purchases just twice. On the first pass, it counts item frequencies. On the second pass, it builds a highly compressed tree map of the items in memory (called an FP-Tree). 
+                  FP-Growth reads all purchases just twice. On the first pass, it counts item frequencies. On the second pass, it builds a highly compressed tree map of the items in memory (called an FP-Tree).
                   It is like a shopper who reads the store catalog once at home, creates a digital blueprint of the store layout, and navigates straight to the paths containing common item combos without ever scanning the store repeatedly. This makes it massive amounts faster for large or dense purchase data.
                 </p>
               </div>
@@ -426,10 +427,10 @@ const Evaluation = () => {
           <Activity size={18} style={{ color: 'var(--primary-color)' }} /> Paired T-Test Hypothesis Testing Results (df = 19)
         </h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
-          A paired-samples t-test compares the performance differences of the Apriori and FP-Growth algorithms under matching transaction sizes. 
+          A paired-samples t-test compares the performance differences of the Apriori and FP-Growth algorithms under matching transaction sizes.
           The null hypothesis (H₀) states that there is no true difference in mean performance. We reject H₀ if p &lt; 0.05.
         </p>
-        
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
           {/* Time statistics */}
           <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.25rem', background: 'rgba(255,255,255,0.01)' }}>
@@ -452,8 +453,8 @@ const Evaluation = () => {
                 <span className="mono">{res.t_test_time.standard_error.toFixed(4)}s</span>
               </div>
               <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.5rem', paddingTop: '0.5rem', color: res.t_test_time.is_significant ? '#10b981' : '#f59e0b', fontWeight: '600', fontSize: '0.8rem' }}>
-                {res.t_test_time.is_significant 
-                  ? "✓ Verified Result: Performance difference is confirmed as real, not a coincidence (p < 0.05)." 
+                {res.t_test_time.is_significant
+                  ? "✓ Verified Result: Performance difference is confirmed as real, not a coincidence (p < 0.05)."
                   : "✗ Inconclusive: Performance difference is within margin of random variance (p >= 0.05)."}
               </div>
             </div>
@@ -480,8 +481,8 @@ const Evaluation = () => {
                 <span className="mono">{res.t_test_mem.standard_error.toFixed(4)} MB</span>
               </div>
               <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.5rem', paddingTop: '0.5rem', color: res.t_test_mem.is_significant ? '#10b981' : '#f59e0b', fontWeight: '600', fontSize: '0.8rem' }}>
-                {res.t_test_mem.is_significant 
-                  ? "✓ Verified Result: Memory footprint difference is confirmed as real, not a coincidence (p < 0.05)." 
+                {res.t_test_mem.is_significant
+                  ? "✓ Verified Result: Memory footprint difference is confirmed as real, not a coincidence (p < 0.05)."
                   : "✗ Inconclusive: Memory usage difference is within margin of random variance (p >= 0.05)."}
               </div>
             </div>
@@ -501,12 +502,12 @@ const Evaluation = () => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
-                <XAxis dataKey="iteration" axisLine={false} tickLine={false} tick={{fill: 'var(--text-muted)', fontSize: 11}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-muted)', fontSize: 11}} />
+                <XAxis dataKey="iteration" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                 <Tooltip contentStyle={{ backgroundColor: '#141414', borderColor: 'var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '0.8rem' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '0.8rem' }} />
-                <Line type="monotone" dataKey="apriori_time" name="Apriori Time (s)" stroke="#6366f1" strokeWidth={2.5} dot={{r: 2.5}} activeDot={{r: 5}} />
-                <Line type="monotone" dataKey="fpgrowth_time" name="FP-Growth Time (s)" stroke="#10b981" strokeWidth={2.5} dot={{r: 2.5}} activeDot={{r: 5}} />
+                <Line type="monotone" dataKey="apriori_time" name="Apriori Time (s)" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="fpgrowth_time" name="FP-Growth Time (s)" stroke="#10b981" strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -519,12 +520,12 @@ const Evaluation = () => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
-                <XAxis dataKey="iteration" axisLine={false} tickLine={false} tick={{fill: 'var(--text-muted)', fontSize: 11}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-muted)', fontSize: 11}} />
+                <XAxis dataKey="iteration" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                 <Tooltip contentStyle={{ backgroundColor: '#141414', borderColor: 'var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '0.8rem' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '0.8rem' }} />
-                <Line type="monotone" dataKey="apriori_mem" name="Apriori Memory (MB)" stroke="#6366f1" strokeWidth={2.5} dot={{r: 2.5}} activeDot={{r: 5}} />
-                <Line type="monotone" dataKey="fpgrowth_mem" name="FP-Growth Memory (MB)" stroke="#10b981" strokeWidth={2.5} dot={{r: 2.5}} activeDot={{r: 5}} />
+                <Line type="monotone" dataKey="apriori_mem" name="Apriori Memory (MB)" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="fpgrowth_mem" name="FP-Growth Memory (MB)" stroke="#10b981" strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -539,14 +540,14 @@ const Evaluation = () => {
         <div>
           <h1 className="page-title">Algorithm Evaluation</h1>
           <p className="page-subtitle">
-            Benchmark Apriori vs FP-Growth using a Paired T-Test across 20 iterations 
+            Benchmark Apriori vs FP-Growth using a Paired T-Test across 20 iterations
             (using Min How Common This Is: {(params.min_support * 100).toFixed(0)}%, Min How Likely: {(params.min_confidence * 100).toFixed(0)}%).
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
           {results && !isRunning && (
-            <button 
-              className="btn btn-secondary" 
+            <button
+              className="btn btn-secondary"
               onClick={handleClearResults}
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}
             >
@@ -594,9 +595,9 @@ const Evaluation = () => {
             <p style={{ color: 'var(--text-muted)', maxWidth: '450px', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '1rem' }}>
               Run a paired t-test benchmark comparing Apriori and FP-Growth performance on your active dataset. The evaluation uses the parameters configured in System Settings (Min How Common This Is: {(params.min_support * 100).toFixed(0)}%, Min How Likely: {(params.min_confidence * 100).toFixed(0)}%).
             </p>
-            <button 
-              className="btn btn-primary" 
-              onClick={handleRunBenchmark} 
+            <button
+              className="btn btn-primary"
+              onClick={handleRunBenchmark}
               disabled={isRunning}
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.85rem 2rem' }}
             >
@@ -672,8 +673,8 @@ const Evaluation = () => {
             <div>
               <h4 style={{ fontWeight: '700', marginBottom: '0.35rem', color: '#fff', fontSize: '0.95rem' }}>Methodology Background</h4>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.6', margin: 0 }}>
-                This page measures performance in real-time by running both algorithms on the currently loaded transactions 20 times. 
-                We apply a paired t-test with a 95% confidence level (α = 0.05). A statistically significant result indicates 
+                This page measures performance in real-time by running both algorithms on the currently loaded transactions 20 times.
+                We apply a paired t-test with a 95% confidence level (α = 0.05). A statistically significant result indicates
                 that the speed or memory efficiency differences are due to the actual structure of the algorithms and not random processing delays on your operating system.
               </p>
             </div>

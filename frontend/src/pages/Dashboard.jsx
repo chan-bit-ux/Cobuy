@@ -41,20 +41,25 @@ const Dashboard = () => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
+        const activeDatasetId = localStorage.getItem('activeDatasetId');
+        
         // Get general statistics
-        const statsRes = await axios.get(`${API_BASE}/stats`);
+        const statsUrl = activeDatasetId ? `${API_BASE}/stats?dataset_id=${activeDatasetId}` : `${API_BASE}/stats`;
+        const statsRes = await axios.get(statsUrl);
         setStats(statsRes.data);
 
         if (statsRes.data.active) {
           // Get trends
-          const trendsRes = await axios.get(`${API_BASE}/trends`);
+          const trendsUrl = activeDatasetId ? `${API_BASE}/trends?dataset_id=${activeDatasetId}` : `${API_BASE}/trends`;
+          const trendsRes = await axios.get(trendsUrl);
           setTrends(trendsRes.data.trends || []);
 
           // Run a quick default mine to show high-confidence rules
           const mineRes = await axios.post(`${API_BASE}/mine`, {
             min_support: 0.05,
             min_confidence: 0.5,
-            min_lift: 1.0
+            min_lift: 1.0,
+            dataset_id: activeDatasetId
           });
           setRules(mineRes.data.rules || []);
         }

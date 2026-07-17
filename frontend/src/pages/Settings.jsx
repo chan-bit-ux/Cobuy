@@ -10,7 +10,20 @@ import {
 const Settings = () => {
   const [params, setParams] = useState(() => {
     const saved = sessionStorage.getItem('analytics_params');
-    return saved ? JSON.parse(saved) : {
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          min_support: parsed.min_support ?? 0.05,
+          min_confidence: parsed.min_confidence ?? 0.5,
+          min_lift: parsed.min_lift ?? 1.0,
+          algorithm: 'auto'
+        };
+      } catch (e) {
+        // Fallback to default
+      }
+    }
+    return {
       min_support: 0.05,
       min_confidence: 0.5,
       min_lift: 1.0,
@@ -21,7 +34,8 @@ const Settings = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const handleSave = () => {
-    sessionStorage.setItem('analytics_params', JSON.stringify(params));
+    const updatedParams = { ...params, algorithm: 'auto' };
+    sessionStorage.setItem('analytics_params', JSON.stringify(updatedParams));
     setSaveSuccess(true);
     setTimeout(() => {
       setSaveSuccess(false);
@@ -182,24 +196,7 @@ const Settings = () => {
               <p className="help-text">Filters out buying patterns where the items have low strength of association (How Strong the Link Is &gt; 1.0 means items are bought together more often than expected by random chance).</p>
             </div>
 
-            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-              <label className="label" style={{ fontSize: '0.9rem', marginBottom: '0.4rem' }}>Default Mining Algorithm</label>
-              <select
-                className="select"
-                value={params.algorithm}
-                onChange={(e) => setParams({ ...params, algorithm: e.target.value })}
-                style={{
-                  fontSize: '0.95rem',
-                  padding: '0.6rem 0.8rem',
-                  backgroundColor: '#141414'
-                }}
-              >
-                <option value="auto">Auto-select (Intelligent Choice)</option>
-                <option value="apriori">Apriori</option>
-                <option value="fpgrowth">FP-Growth</option>
-              </select>
-              <p className="help-text">Choose 'Auto-select' to let the system automatically choose Apriori for smaller datasets and FP-Growth for larger ones.</p>
-            </div>
+
           </div>
 
           <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '2rem' }}>

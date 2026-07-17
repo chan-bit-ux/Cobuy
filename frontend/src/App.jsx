@@ -44,7 +44,7 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
-const Sidebar = ({ onLogout }) => {
+const Sidebar = ({ onLogout, user }) => {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo" style={{ paddingBottom: '1.25rem' }}>
@@ -60,10 +60,12 @@ const Sidebar = ({ onLogout }) => {
           <BarChart3 size={20} />
           <span>Analytics</span>
         </NavLink>
-        <NavLink to="/evaluation" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <Layers size={20} />
-          <span>Evaluation</span>
-        </NavLink>
+        {user?.email === 'admin@ruleminer.ai' && (
+          <NavLink to="/evaluation" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <Layers size={20} />
+            <span>Evaluation</span>
+          </NavLink>
+        )}
         <NavLink to="/history" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <History size={20} />
           <span>History</span>
@@ -138,12 +140,12 @@ function App() {
         </Routes>
       ) : (
         <div style={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
-          <Sidebar onLogout={handleLogout} />
+          <Sidebar onLogout={handleLogout} user={user} />
           <main className="main-content" style={{ paddingTop: '6rem' }}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/analytics" element={<Analytics />} />
-              <Route path="/evaluation" element={<Evaluation />} />
+              <Route path="/evaluation" element={user?.email === 'admin@ruleminer.ai' ? <Evaluation /> : <Navigate to="/" replace />} />
               <Route path="/history" element={<Dataset />} />
               <Route path="/data" element={<Navigate to="/history" replace />} />
               <Route path="/settings" element={<SettingsPage />} />

@@ -241,13 +241,22 @@ def upload_file():
         unique_items_count = len(set([item for sublist in transactions for item in sublist]))
 
         existing_ds = db.get_dataset_by_hash(file_hash, user_email=user_email)
+        if not existing_ds:
+            datasets = db.get_datasets(user_email=user_email)
+            for ds in datasets:
+                if ds['name'] == file.filename:
+                    existing_ds = ds
+                    break
+
         if existing_ds:
             ds_id = existing_ds['id']
-            db.clear_transactions(user_email=user_email)
-            db.add_transactions(transactions, dataset_id=ds_id, user_email=user_email)
+            # Check if transactions already exist for this dataset
+            txs_exist = db.transactions_exist(ds_id, user_email=user_email)
+            if not txs_exist:
+                db.add_transactions(transactions, dataset_id=ds_id, user_email=user_email)
             return jsonify({
                 'duplicate_detected': True,
-                'message': f'This file ("{existing_ds["name"]}") was already uploaded on {existing_ds.get("upload_date", "")}. Reusing existing dataset from your File History.',
+                'message': f'This file ("{existing_ds["name"]}") is already in your File History (uploaded on {existing_ds.get("upload_date", "")}). Reusing the existing dataset.',
                 'transaction_count': total_tx,
                 'unique_items': unique_items_count,
                 'dataset_id': ds_id,
@@ -260,8 +269,7 @@ def upload_file():
         # Save dataset metadata scoped to current user with SHA-256 hash
         ds_id = db.add_dataset(file.filename, total_tx, unique_items_count, user_email=user_email, file_hash=file_hash)
         
-        # Clear previous transaction data for this user and store new transactions
-        db.clear_transactions(user_email=user_email)
+        # Store new transactions without clearing other datasets
         db.add_transactions(transactions, dataset_id=ds_id, user_email=user_email)
         
         return jsonify({
@@ -297,8 +305,13 @@ def mine_rules():
 
     algorithm = params.get('algorithm', 'auto') # 'auto', 'apriori', or 'fpgrowth'
     dataset_id = params.get('dataset_id') or request.args.get('dataset_id')
+    user_email = get_current_user_email()
+    if not dataset_id:
+        datasets = db.get_datasets(user_email=user_email)
+        if datasets:
+            dataset_id = datasets[0]['id']
 
-    transactions = db.get_transactions(user_email=get_current_user_email(), dataset_id=dataset_id)
+    transactions = db.get_transactions(user_email=user_email, dataset_id=dataset_id)
     if not transactions:
         return jsonify({'error': 'No data uploaded or recorded yet'}), 400
 
@@ -443,7 +456,12 @@ def mine_rules():
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     dataset_id = request.args.get('dataset_id')
-    transactions = db.get_transactions(user_email=get_current_user_email(), dataset_id=dataset_id)
+    user_email = get_current_user_email()
+    if not dataset_id:
+        datasets = db.get_datasets(user_email=user_email)
+        if datasets:
+            dataset_id = datasets[0]['id']
+    transactions = db.get_transactions(user_email=user_email, dataset_id=dataset_id)
     if transactions is None or len(transactions) == 0:
         return jsonify({
             'active': False,
@@ -550,7 +568,6 @@ def load_template():
 
             
         user_email = get_current_user_email()
-        db.clear_transactions(user_email=user_email)
         # Compute unique items count
         unique_items_count = len(set([item for sublist in transactions for item in sublist]))
         total_tx = len(transactions)
@@ -620,7 +637,13 @@ def delete_product_endpoint(product_id):
 
 @app.route('/api/trends', methods=['GET'])
 def get_trends():
-    transactions_data = db.get_transactions_with_dates(user_email=get_current_user_email())
+    dataset_id = request.args.get('dataset_id')
+    user_email = get_current_user_email()
+    if not dataset_id:
+        datasets = db.get_datasets(user_email=user_email)
+        if datasets:
+            dataset_id = datasets[0]['id']
+    transactions_data = db.get_transactions_with_dates(user_email=user_email, dataset_id=dataset_id)
     if not transactions_data:
         return jsonify({'trends': []})
         
@@ -672,6 +695,10 @@ def get_trends():
 
 @app.route('/api/benchmark', methods=['POST'])
 def run_benchmark():
+    user_email = get_current_user_email()
+    if not user_email or user_email.lower() != 'admin@ruleminer.ai':
+        return jsonify({'error': 'Unauthorized. Evaluation is restricted to admin users.'}), 403
+
     params = request.json or {}
     try:
         min_support = float(params.get('min_support', 0.05))
@@ -682,8 +709,13 @@ def run_benchmark():
         min_confidence = float(params.get('min_confidence', 0.5))
     except (TypeError, ValueError):
         min_confidence = 0.5
-    
-    transactions = db.get_transactions(user_email=get_current_user_email())
+    dataset_id = params.get('dataset_id') or request.args.get('dataset_id')
+    user_email = get_current_user_email()
+    if not dataset_id:
+        datasets = db.get_datasets(user_email=user_email)
+        if datasets:
+            dataset_id = datasets[0]['id']
+    transactions = db.get_transactions(user_email=user_email, dataset_id=dataset_id)
     if not transactions or len(transactions) < 5:
         return jsonify({'error': 'Please upload a larger dataset first to run the performance benchmark (min 5 transactions).'}), 400
         
@@ -792,7 +824,6 @@ def run_benchmark():
 
 @app.route('/api/clear', methods=['POST'])
 def clear_data():
-    db.clear_transactions(user_email=get_current_user_email())
     data_store['last_rules'] = None
     return jsonify({
         'message': 'Data cleared successfully',

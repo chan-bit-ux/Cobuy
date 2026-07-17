@@ -309,6 +309,16 @@ def get_dataset_by_hash(file_hash, user_email=None):
     conn.close()
     return dict(row) if row else None
 
+def transactions_exist(dataset_id, user_email=None):
+    conn = get_db_connection()
+    if user_email:
+        row = conn.execute('SELECT COUNT(*) FROM transactions WHERE dataset_id = ? AND user_email = ?', (dataset_id, user_email)).fetchone()
+    else:
+        row = conn.execute('SELECT COUNT(*) FROM transactions WHERE dataset_id = ?', (dataset_id,)).fetchone()
+    count = row[0] if row else 0
+    conn.close()
+    return count > 0
+
 def cleanup_duplicate_datasets(user_email=None):
     conn = get_db_connection()
     cursor = conn.cursor()
