@@ -86,7 +86,19 @@ const Dashboard = () => {
   const totalItemCount = pieData.reduce((sum, item) => sum + item.value, 0);
 
   // Format high confidence rules (top 5 sorted by confidence descending)
-  const sortedRules = [...rules]
+  const getFilteredRules = (rawRules) => {
+    const seen = new Map();
+    rawRules.forEach(rule => {
+      const key = [...rule.antecedents, ...rule.consequents].sort().join(',');
+      const existing = seen.get(key);
+      if (!existing || rule.confidence > existing.confidence) {
+        seen.set(key, rule);
+      }
+    });
+    return Array.from(seen.values());
+  };
+
+  const sortedRules = getFilteredRules(rules)
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 5);
 

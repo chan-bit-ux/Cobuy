@@ -164,8 +164,9 @@ const Analytics = () => {
     // 3. Association Rules / Recommendations Section
     csvContent += "=== BUYING PATTERNS (RECOMMENDATIONS) ===\n";
     csvContent += "Frequently Bought Together,Buying Pattern,How Likely,How Strong the Link Is,Suggested Action\n";
-    if (results.rules && results.rules.length > 0) {
-      results.rules.forEach(rule => {
+    const filteredRules = getFilteredRules();
+    if (filteredRules && filteredRules.length > 0) {
+      filteredRules.forEach(rule => {
         const fbt = `"${[...rule.antecedents, ...rule.consequents].join(' + ')}"`;
         const associationRuleStr = `"${rule.antecedents.join(', ')} -> ${rule.consequents.join(', ')}"`;
         const confidencePct = `${(rule.confidence * 100).toFixed(1)}%`;
@@ -306,6 +307,21 @@ const Analytics = () => {
   const filteredItems = (stats.all_items || []).filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const getFilteredRules = () => {
+    if (!results || !results.rules) return [];
+    const seen = new Map();
+    results.rules.forEach(rule => {
+      const key = [...rule.antecedents, ...rule.consequents].sort().join(',');
+      const existing = seen.get(key);
+      if (!existing || rule.confidence > existing.confidence) {
+        seen.set(key, rule);
+      }
+    });
+    return Array.from(seen.values());
+  };
+
+  const filteredRules = getFilteredRules();
 
   const getGroupedItemsets = () => {
     if (!results || !results.frequent_itemsets) return [];
@@ -686,7 +702,7 @@ const Analytics = () => {
                     </span>
                   </h3>
                 </div>
-                {results && (results.rules?.length > 0 || results.frequent_itemsets?.length > 0) && (
+                {results && (filteredRules.length > 0 || results.frequent_itemsets?.length > 0) && (
                   <button onClick={handleExportCSV} className="btn btn-secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem' }}>
                     <Download size={16} /> Export Report (CSV)
                   </button>
@@ -752,7 +768,7 @@ const Analytics = () => {
                     outline: 'none'
                   }}
                 >
-                  Recommendations ({results?.rules?.length || 0})
+                  Recommendations ({filteredRules.length})
                 </button>
                 <button
                   onClick={() => setActiveSubTab('itemsets')}
@@ -778,7 +794,7 @@ const Analytics = () => {
                 border: '1px solid var(--border-color)',
                 borderRadius: '8px',
                 background: 'rgba(0, 0, 0, 0.1)',
-                display: (!results || (activeSubTab === 'recommendations' && (!results.rules || results.rules.length === 0)) || (activeSubTab === 'itemsets' && groupedSets.length === 0)) ? 'flex' : 'block',
+                display: (!results || (activeSubTab === 'recommendations' && filteredRules.length === 0) || (activeSubTab === 'itemsets' && groupedSets.length === 0)) ? 'flex' : 'block',
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center'
@@ -795,7 +811,7 @@ const Analytics = () => {
                   <>
                     {activeSubTab === 'recommendations' && (
                       <>
-                        {results.rules && results.rules.length > 0 ? (
+                        {filteredRules.length > 0 ? (
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                             <thead>
                               <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-color)' }}>
@@ -817,7 +833,7 @@ const Analytics = () => {
                               </tr>
                             </thead>
                             <tbody>
-                              {results.rules.map((rule, idx) => {
+                              {filteredRules.map((rule, idx) => {
                                 const confidencePct = (rule.confidence * 100).toFixed(1);
                                 const isHighConfidence = rule.confidence >= 0.8;
                                 const isMediumConfidence = rule.confidence >= 0.5 && rule.confidence < 0.8;

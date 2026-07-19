@@ -105,16 +105,6 @@ const Settings = () => {
             )}
           </div>
           
-          <div className="form-group">
-            <label className="label">Target Business Domain</label>
-            <select className="select" defaultValue="Custom / Multi-retail">
-              <option>Convenience Store</option>
-              <option>Pet Shop</option>
-              <option>Coffee Shop</option>
-              <option>Custom / Multi-retail</option>
-            </select>
-            <p className="help-text">Specializes the recommendation engine and UI for the selected niche.</p>
-          </div>
 
           <div style={{ borderTop: '1px solid var(--border-color)', margin: '2rem 0', paddingTop: '1.5rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1.25rem', color: 'var(--primary-color)' }}>Buying Pattern Mining Defaults</h3>

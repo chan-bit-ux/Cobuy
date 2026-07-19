@@ -32,7 +32,7 @@ const Evaluation = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('friendly'); // 'friendly' or 'technical'
-  const [isAnalogyOpen, setIsAnalogyOpen] = useState(false);
+  const [showAnalogyPopover, setShowAnalogyPopover] = useState(false);
 
   const [params, setParams] = useState(() => {
     const analyticsSaved = sessionStorage.getItem('analytics_params');
@@ -204,7 +204,7 @@ const Evaluation = () => {
     return (
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 0, gap: '1.5rem' }}>
         {/* Time Efficiency */}
-        <div className="card stat-card" style={{ borderLeft: '4px solid #6366f1', padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div className="card stat-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#6366f1', marginBottom: '0.5rem' }}>
               <Clock size={16} />
@@ -223,7 +223,7 @@ const Evaluation = () => {
                 <span className="mono">{formatTime(res.apriori.avg_time)}</span>
               </div>
               <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: `${aprioriTimePct}%`, height: '100%', background: '#f59e0b', borderRadius: '4px', transition: 'width 0.4s ease' }} />
+                <div style={{ width: `${aprioriTimePct}%`, height: '100%', background: '#6366f1', borderRadius: '4px', transition: 'width 0.4s ease' }} />
               </div>
             </div>
             <div>
@@ -239,7 +239,7 @@ const Evaluation = () => {
         </div>
 
         {/* Resource Savings */}
-        <div className="card stat-card" style={{ borderLeft: '4px solid #a855f7', padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div className="card stat-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#a855f7', marginBottom: '0.5rem' }}>
               <Cpu size={16} />
@@ -258,7 +258,7 @@ const Evaluation = () => {
                 <span className="mono">{res.apriori.avg_mem.toFixed(2)} MB</span>
               </div>
               <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: `${aprioriMemPct}%`, height: '100%', background: '#f59e0b', borderRadius: '4px', transition: 'width 0.4s ease' }} />
+                <div style={{ width: `${aprioriMemPct}%`, height: '100%', background: '#6366f1', borderRadius: '4px', transition: 'width 0.4s ease' }} />
               </div>
             </div>
             <div>
@@ -274,10 +274,10 @@ const Evaluation = () => {
         </div>
 
         {/* Confidence level */}
-        <div className="card stat-card" style={{ borderLeft: '4px solid #f59e0b', padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div className="card stat-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f59e0b' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: res.t_test_time.is_significant ? '#10b981' : '#f59e0b' }}>
                 <Activity size={16} />
                 <span style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase' }}>Test Reliability</span>
               </div>
@@ -369,53 +369,6 @@ const Evaluation = () => {
             </p>
           </div>
         </div>
-
-        {/* Shopping Analogy Accordion */}
-        <div className="card" style={{ border: '1px solid var(--border-color)', padding: 0, overflow: 'hidden' }}>
-          <button
-            onClick={() => setIsAnalogyOpen(!isAnalogyOpen)}
-            style={{
-              width: '100%',
-              background: 'rgba(255, 255, 255, 0.01)',
-              border: 'none',
-              padding: '0.75rem 1.25rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer',
-              color: '#fff',
-              fontWeight: '700',
-              fontSize: '0.9rem'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <HelpCircle size={16} style={{ color: 'var(--primary-color)' }} />
-              <span>How do these algorithms work? (The Supermarket Analogy)</span>
-            </div>
-            <div>
-              {isAnalogyOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </div>
-          </button>
-
-          {isAnalogyOpen && (
-            <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.15)', fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <h5 style={{ color: '#6366f1', fontWeight: '700', marginBottom: '0.25rem', fontSize: '0.95rem' }}>🛒 Apriori: The Multi-Pass Shopper</h5>
-                <p style={{ margin: 0 }}>
-                  Apriori stands for "prior knowledge". It operates in iterative steps: first it finds popular single items, then combines them into pairs and rescans the database, then combines those into triples and rescans the database again.
-                  It is like a supermarket shopper who walks down every aisle of the store, goes home, thinks of combination items, walks down every aisle again, and repeats this process 5 or 10 times. It becomes very slow as transactions increase because of the repeated database scans.
-                </p>
-              </div>
-              <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '1rem' }}>
-                <h5 style={{ color: '#10b981', fontWeight: '700', marginBottom: '0.25rem', fontSize: '0.95rem' }}>🌳 FP-Growth (Frequent Pattern): The Catalog Mapper</h5>
-                <p style={{ margin: 0 }}>
-                  FP-Growth reads all purchases just twice. On the first pass, it counts item frequencies. On the second pass, it builds a highly compressed tree map of the items in memory (called an FP-Tree).
-                  It is like a shopper who reads the store catalog once at home, creates a digital blueprint of the store layout, and navigates straight to the paths containing common item combos without ever scanning the store repeatedly. This makes it massive amounts faster for large or dense purchase data.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     );
   };
@@ -496,8 +449,89 @@ const Evaluation = () => {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '0.5rem' }}>
         {/* Speed Chart */}
-        <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--border-color)' }}>
-          <h3 style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '1.25rem', color: '#fff' }}>Execution Time Curve (20 Iterations)</h3>
+        <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--border-color)', position: 'relative', zIndex: showAnalogyPopover ? 10 : 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+            <h3 style={{ fontWeight: '700', fontSize: '1rem', color: '#fff', margin: 0 }}>Execution Time Curve (20 Iterations)</h3>
+            <div
+              onMouseEnter={() => setShowAnalogyPopover(true)}
+              onMouseLeave={() => setShowAnalogyPopover(false)}
+              style={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}
+            >
+              <HelpCircle
+                size={16}
+                style={{
+                  cursor: 'help',
+                  color: showAnalogyPopover ? 'var(--primary-color)' : 'var(--text-dim)',
+                  transition: 'var(--transition)'
+                }}
+              />
+
+              {showAnalogyPopover && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 10px)',
+                  left: '-150px',
+                  width: '660px',
+                  background: '#121212',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '12px',
+                  padding: '1.75rem',
+                  boxShadow: '0 20px 40px rgba(0,0,0,0.8), inset 1px 1px 0px 0px rgba(255,255,255,0.05)',
+                  zIndex: 1000,
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '1.75rem',
+                  pointerEvents: 'auto',
+                  animation: 'popoverFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                }}>
+                  <style>{`
+                    @keyframes popoverFadeIn {
+                      from {
+                        opacity: 0;
+                        transform: translateY(8px);
+                      }
+                      to {
+                        opacity: 1;
+                        transform: translateY(0);
+                      }
+                    }
+                  `}</style>
+
+                  {/* Apriori Column */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Apriori Solution
+                    </span>
+                    <h4 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#6366f1', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0 }}>
+                      <span>🛒</span> Multi-Pass Shopper
+                    </h4>
+                    <p style={{ fontSize: '0.92rem', color: 'var(--text-muted)', lineHeight: '1.6', margin: 0 }}>
+                      Operates in iterative steps: first it finds popular single items, then combines them into pairs and rescans the database, then triples, etc.
+                    </p>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontStyle: 'italic', lineHeight: '1.5', margin: 0, borderLeft: '2px solid rgba(99, 102, 241, 0.3)', paddingLeft: '8px' }}>
+                      Like a supermarket shopper walking down every aisle, going home, thinking of combos, scanning all aisles again, and repeating. Slows down significantly as transactions grow.
+                    </p>
+                  </div>
+
+                  {/* FP-Growth Column */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderLeft: '1px solid var(--border-color)', paddingLeft: '1.75rem' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      FP-Growth Solution
+                    </span>
+                    <h4 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0 }}>
+                      <span>🌳</span> Catalog Mapper
+                    </h4>
+                    <p style={{ fontSize: '0.92rem', color: 'var(--text-muted)', lineHeight: '1.6', margin: 0 }}>
+                      Reads purchases exactly twice to build a highly compressed tree map (FP-Tree) in memory, avoiding candidate generation.
+                    </p>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontStyle: 'italic', lineHeight: '1.5', margin: 0, borderLeft: '2px solid rgba(16, 185, 129, 0.3)', paddingLeft: '8px' }}>
+                      Like reading the catalog once at home, creating a digital blueprint of the store layout, and going straight to paths without repeated scans. Scales smoothly.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           <div style={{ height: '280px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data}>
@@ -664,24 +698,10 @@ const Evaluation = () => {
           </>
         )}
 
-        {/* Methodology Info Card */}
-        <div className="card" style={{ background: 'rgba(99, 102, 241, 0.03)', borderColor: 'rgba(99, 102, 241, 0.15)' }}>
-          <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start' }}>
-            <div style={{ padding: '0.5rem', background: 'var(--card-bg)', borderRadius: '8px', color: 'var(--primary-color)', border: '1px solid var(--border-color)' }}>
-              <Info size={22} />
-            </div>
-            <div>
-              <h4 style={{ fontWeight: '700', marginBottom: '0.35rem', color: '#fff', fontSize: '0.95rem' }}>Methodology Background</h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.6', margin: 0 }}>
-                This page measures performance in real-time by running both algorithms on the currently loaded transactions 20 times.
-                We apply a paired t-test with a 95% confidence level (α = 0.05). A statistically significant result indicates
-                that the speed or memory efficiency differences are due to the actual structure of the algorithms and not random processing delays on your operating system.
-              </p>
-            </div>
-          </div>
-        </div>
 
       </div>
+
+
     </div>
   );
 };
