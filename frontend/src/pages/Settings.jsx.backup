@@ -1,24 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Shield, 
   Globe, 
   Database,
   Sliders,
-  Check,
-  Sun,
-  Moon
+  Check
 } from 'lucide-react';
 
 const Settings = () => {
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme') || 'dark';
-  });
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
   const [params, setParams] = useState(() => {
     const saved = sessionStorage.getItem('analytics_params');
     if (saved) {
@@ -71,13 +60,8 @@ const Settings = () => {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <div>
-          <h1 className="page-title">
-            <Sliders size={28} style={{ color: 'var(--primary-color)' }} />
-            System Settings
-          </h1>
-          <p className="page-subtitle">Manage mining parameters and application preferences.</p>
-        </div>
+        <h1 className="page-title">System Settings</h1>
+        <p className="page-subtitle">Manage mining parameters and application preferences.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
@@ -121,63 +105,11 @@ const Settings = () => {
             )}
           </div>
           
-          {/* Theme Appearance Setting Card */}
-          <div style={{ borderTop: '1px solid var(--border-color)', margin: '1.5rem 0 2rem 0', paddingTop: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-              {theme === 'dark' ? <Moon size={22} style={{ color: 'var(--primary-color)' }} /> : <Sun size={22} style={{ color: 'var(--primary-color)' }} />}
-              <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>Interface Theme Appearance</h3>
-            </div>
-            <p className="help-text" style={{ marginBottom: '1.25rem' }}>Choose between bright, airy light mode and complementary living dark mode.</p>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button
-                type="button"
-                onClick={() => setTheme('light')}
-                style={{
-                  flex: 1,
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: `2px solid ${theme === 'light' ? 'var(--primary-color)' : 'var(--border-color)'}`,
-                  background: theme === 'light' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                  color: 'var(--text-main)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.75rem',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  transition: 'var(--transition)'
-                }}
-              >
-                <Sun size={20} /> Bright Light Mode
-              </button>
-              <button
-                type="button"
-                onClick={() => setTheme('dark')}
-                style={{
-                  flex: 1,
-                  padding: '1rem',
-                  borderRadius: '12px',
-                  border: `2px solid ${theme === 'dark' ? 'var(--primary-color)' : 'var(--border-color)'}`,
-                  background: theme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                  color: 'var(--text-main)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.75rem',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  transition: 'var(--transition)'
-                }}
-              >
-                <Moon size={20} /> Living Dark Mode
-              </button>
-            </div>
-          </div>
 
           <div style={{ borderTop: '1px solid var(--border-color)', margin: '2rem 0', paddingTop: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
               <Database size={22} style={{ color: 'var(--primary-color)' }} />
-              <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>Adaptive Threshold Engine</h3>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#fff', margin: 0 }}>Adaptive Threshold Engine</h3>
             </div>
             
             <div style={{
@@ -198,18 +130,18 @@ const Settings = () => {
                 </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-                <div style={{ background: 'var(--card-bg)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1.25rem' }}>
+                <div style={{ background: 'rgba(0, 0, 0, 0.25)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.3rem' }}>Coffee Shop Defaults</div>
-                  <div className="mono" style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: '600' }}>1.0% Support / 20% Conf</div>
+                  <div className="mono" style={{ fontSize: '0.9rem', color: '#fff', fontWeight: '600' }}>1.0% Support / 20% Conf</div>
                 </div>
-                <div style={{ background: 'var(--card-bg)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ background: 'rgba(0, 0, 0, 0.25)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.3rem' }}>Convenience / Retail</div>
-                  <div className="mono" style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: '600' }}>0.5% Support / 15% Conf</div>
+                  <div className="mono" style={{ fontSize: '0.9rem', color: '#fff', fontWeight: '600' }}>0.5% Support / 15% Conf</div>
                 </div>
-                <div style={{ background: 'var(--card-bg)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ background: 'rgba(0, 0, 0, 0.25)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.3rem' }}>Pet Food Store</div>
-                  <div className="mono" style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: '600' }}>1.0% Support / 15% Conf</div>
+                  <div className="mono" style={{ fontSize: '0.9rem', color: '#fff', fontWeight: '600' }}>1.0% Support / 15% Conf</div>
                 </div>
               </div>
 

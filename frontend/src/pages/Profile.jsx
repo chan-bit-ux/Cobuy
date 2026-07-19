@@ -23,8 +23,13 @@ const Profile = ({ user }) => {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1 className="page-title">User Profile</h1>
-        <p className="page-subtitle">Manage your account information and view activity history.</p>
+        <div>
+          <h1 className="page-title">
+            <User size={28} style={{ color: 'var(--primary-color)' }} />
+            User Profile
+          </h1>
+          <p className="page-subtitle">Manage your account information and view activity history.</p>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>

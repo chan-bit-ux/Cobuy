@@ -44,7 +44,7 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
-const Sidebar = ({ onLogout, user, theme, onToggleTheme }) => {
+const Sidebar = ({ onLogout, user }) => {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo" style={{ paddingBottom: '1.25rem' }}>
@@ -82,23 +82,10 @@ const Sidebar = ({ onLogout, user, theme, onToggleTheme }) => {
           <span>Profile</span>
         </NavLink>
         <div
-          onClick={onToggleTheme}
-          className="nav-link"
-          style={{
-            cursor: 'pointer',
-            background: 'var(--sidebar-active-bg)',
-            color: 'var(--primary-color)',
-            marginTop: '0.5rem',
-            marginBottom: '0.5rem'
-          }}
-        >
-          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-        </div>
-        <div
           onClick={onLogout}
           className="nav-link"
           style={{
+            marginTop: '0.5rem',
             cursor: 'pointer'
           }}
         >
@@ -126,18 +113,9 @@ function App() {
     }
   });
 
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme') || 'dark';
-  });
-
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const handleToggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  };
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }, []);
 
   const handleLogin = (token, userData) => {
     localStorage.setItem('token', token);
@@ -162,7 +140,7 @@ function App() {
         </Routes>
       ) : (
         <div style={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
-          <Sidebar onLogout={handleLogout} user={user} theme={theme} onToggleTheme={handleToggleTheme} />
+          <Sidebar onLogout={handleLogout} user={user} />
           <main className="main-content" style={{ paddingTop: '6rem' }}>
             <Routes>
               <Route path="/" element={<Dashboard />} />

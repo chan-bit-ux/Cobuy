@@ -31,6 +31,7 @@ def init_db():
             name TEXT NOT NULL,
             user_email TEXT NULL REFERENCES users(email) ON DELETE CASCADE,
             file_hash TEXT NULL,
+            market_type TEXT DEFAULT 'Default/unknown',
             upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             transaction_count INTEGER,
             unique_items INTEGER
@@ -48,6 +49,21 @@ def init_db():
     if 'file_hash' not in ds_columns:
         try:
             cursor.execute("ALTER TABLE datasets ADD COLUMN file_hash TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if 'market_type' not in ds_columns:
+        try:
+            cursor.execute("ALTER TABLE datasets ADD COLUMN market_type TEXT DEFAULT 'Default/unknown'")
+        except sqlite3.OperationalError:
+            pass
+    if 'basket_avg' not in ds_columns:
+        try:
+            cursor.execute("ALTER TABLE datasets ADD COLUMN basket_avg REAL DEFAULT NULL")
+        except sqlite3.OperationalError:
+            pass
+    if 'date_range_days' not in ds_columns:
+        try:
+            cursor.execute("ALTER TABLE datasets ADD COLUMN date_range_days INTEGER DEFAULT NULL")
         except sqlite3.OperationalError:
             pass
     
@@ -84,6 +100,11 @@ def init_db():
     if 'user_email' not in tx_columns:
         try:
             cursor.execute("ALTER TABLE transactions ADD COLUMN user_email TEXT REFERENCES users(email) ON DELETE CASCADE")
+        except sqlite3.OperationalError:
+            pass
+    if 'basket_value' not in tx_columns:
+        try:
+            cursor.execute("ALTER TABLE transactions ADD COLUMN basket_value REAL DEFAULT NULL")
         except sqlite3.OperationalError:
             pass
             
@@ -173,6 +194,31 @@ def get_transactions(user_email=None, dataset_id=None):
     sorted_keys = sorted(transactions_map.keys())
     return [transactions_map[k] for k in sorted_keys]
 
+def get_transaction_basket_values(user_email=None, dataset_id=None):
+    """Return a list of basket_value floats in the same order as get_transactions().
+    Values are 0.0 for transactions with NULL basket_value (uploaded before this feature).
+    Returns an empty list if no transactions exist.
+    """
+    conn = get_db_connection()
+    query = 'SELECT t.id, t.basket_value FROM transactions t'
+    conditions = []
+    params = []
+    if user_email:
+        conditions.append("(t.user_email = ? OR t.user_email IS NULL)")
+        params.append(user_email)
+    if dataset_id:
+        conditions.append("t.dataset_id = ?")
+        params.append(dataset_id)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY t.id"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    if not rows:
+        return []
+    sorted_rows = sorted(rows, key=lambda r: r['id'])
+    return [float(r['basket_value']) if r['basket_value'] is not None else 0.0 for r in sorted_rows]
+
 def get_transactions_with_dates(user_email=None, dataset_id=None):
     conn = get_db_connection()
     query = '''
@@ -248,7 +294,12 @@ def add_transaction(items, user_email=None, dataset_id=None):
         conn.close()
     return tx_id
 
-def add_transactions(list_of_items, dataset_id=None, user_email=None):
+def add_transactions(list_of_items, dataset_id=None, user_email=None, basket_values=None):
+    """
+    Insert a batch of transactions.
+    basket_values: optional list[float] parallel to list_of_items, holding the
+                   SUM(Quantity * UnitPrice) for each transaction (0 if unknown).
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -257,9 +308,13 @@ def add_transactions(list_of_items, dataset_id=None, user_email=None):
         unique_items = list(set(all_items))
         for item in unique_items:
             cursor.execute('INSERT OR IGNORE INTO products (name) VALUES (?)', (item,))
-            
-        for items in list_of_items:
-            cursor.execute('INSERT INTO transactions (dataset_id, user_email) VALUES (?, ?)', (dataset_id, user_email))
+
+        for i, items in enumerate(list_of_items):
+            bv = float(basket_values[i]) if basket_values and i < len(basket_values) else None
+            cursor.execute(
+                'INSERT INTO transactions (dataset_id, user_email, basket_value) VALUES (?, ?, ?)',
+                (dataset_id, user_email, bv)
+            )
             tx_id = cursor.lastrowid
             items_data = [(tx_id, item) for item in items]
             cursor.executemany('INSERT INTO transaction_items (transaction_id, item) VALUES (?, ?)', items_data)
@@ -273,9 +328,9 @@ def add_transactions(list_of_items, dataset_id=None, user_email=None):
 def get_datasets(user_email=None):
     conn = get_db_connection()
     if user_email:
-        rows = conn.execute('SELECT * FROM datasets WHERE user_email = ? ORDER BY upload_date DESC', (user_email,)).fetchall()
+        rows = conn.execute('SELECT * FROM datasets WHERE user_email = ? ORDER BY upload_date DESC, id DESC', (user_email,)).fetchall()
     else:
-        rows = conn.execute('SELECT * FROM datasets ORDER BY upload_date DESC').fetchall()
+        rows = conn.execute('SELECT * FROM datasets ORDER BY upload_date DESC, id DESC').fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
@@ -288,12 +343,13 @@ def get_dataset_by_id(dataset_id, user_email=None):
     conn.close()
     return dict(row) if row else None
 
-def add_dataset(name, transaction_count, unique_items, user_email=None, file_hash=None):
+def add_dataset(name, transaction_count, unique_items, user_email=None, file_hash=None,
+                market_type='Default/unknown', basket_avg=None, date_range_days=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO datasets (name, user_email, file_hash, transaction_count, unique_items) VALUES (?, ?, ?, ?, ?)',
-        (name, user_email, file_hash, transaction_count, unique_items)
+        'INSERT INTO datasets (name, user_email, file_hash, market_type, transaction_count, unique_items, basket_avg, date_range_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        (name, user_email, file_hash, market_type, transaction_count, unique_items, basket_avg, date_range_days)
     )
     ds_id = cursor.lastrowid
     conn.commit()
@@ -303,9 +359,9 @@ def add_dataset(name, transaction_count, unique_items, user_email=None, file_has
 def get_dataset_by_hash(file_hash, user_email=None):
     conn = get_db_connection()
     if user_email:
-        row = conn.execute('SELECT * FROM datasets WHERE file_hash = ? AND user_email = ? ORDER BY upload_date DESC LIMIT 1', (file_hash, user_email)).fetchone()
+        row = conn.execute('SELECT * FROM datasets WHERE file_hash = ? AND user_email = ? ORDER BY upload_date DESC, id DESC LIMIT 1', (file_hash, user_email)).fetchone()
     else:
-        row = conn.execute('SELECT * FROM datasets WHERE file_hash = ? ORDER BY upload_date DESC LIMIT 1', (file_hash,)).fetchone()
+        row = conn.execute('SELECT * FROM datasets WHERE file_hash = ? ORDER BY upload_date DESC, id DESC LIMIT 1', (file_hash,)).fetchone()
     conn.close()
     return dict(row) if row else None
 

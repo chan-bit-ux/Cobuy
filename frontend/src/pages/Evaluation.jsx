@@ -570,12 +570,15 @@ const Evaluation = () => {
 
   return (
     <div className="fade-in">
-      <div className="page-header" style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '2rem' }}>
+      <div className="page-header">
         <div>
-          <h1 className="page-title">Algorithm Evaluation</h1>
+          <h1 className="page-title">
+            <Cpu size={28} style={{ color: 'var(--primary-color)' }} />
+            Algorithm Evaluation
+          </h1>
           <p className="page-subtitle">
             Benchmark Apriori vs FP-Growth using a Paired T-Test across 20 iterations
-            (using Min How Common This Is: {(params.min_support * 100).toFixed(0)}%, Min How Likely: {(params.min_confidence * 100).toFixed(0)}%).
+            (using Adaptive Store-Specific Thresholds tailored to the active dataset).
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
@@ -627,7 +630,7 @@ const Evaluation = () => {
             <Activity size={48} style={{ color: 'var(--text-dim)', marginBottom: '0.5rem' }} />
             <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#fff', marginBottom: '0.5rem' }}>No Benchmark Run Yet</h3>
             <p style={{ color: 'var(--text-muted)', maxWidth: '450px', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '1rem' }}>
-              Run a paired t-test benchmark comparing Apriori and FP-Growth performance on your active dataset. The evaluation uses the parameters configured in System Settings (Min How Common This Is: {(params.min_support * 100).toFixed(0)}%, Min How Likely: {(params.min_confidence * 100).toFixed(0)}%).
+              Run a paired t-test benchmark comparing Apriori and FP-Growth performance on your active dataset. The evaluation uses the <strong>Adaptive Store-Specific Thresholds</strong> automatically optimized for the dataset's market category.
             </p>
             <button
               className="btn btn-primary"

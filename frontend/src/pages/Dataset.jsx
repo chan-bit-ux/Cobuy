@@ -5,9 +5,8 @@ import {
   FileText, 
   Trash2, 
   History as HistoryIcon,
-  Play,
   Database,
-  Lock
+  Play
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000/api';
@@ -62,8 +61,8 @@ const Dataset = () => {
     <div className="fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <HistoryIcon size={28} className="text-primary" />
+          <h1 className="page-title">
+            <HistoryIcon size={28} style={{ color: 'var(--primary-color)' }} />
             File History
           </h1>
           <p className="page-subtitle">
@@ -72,7 +71,7 @@ const Dataset = () => {
         </div>
       </div>
 
-      <div className="stats-grid" style={{ marginBottom: '2rem' }}>
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '2rem' }}>
         <div className="card stat-card">
           <div className="stat-label">Your Uploaded Files</div>
           <div className="stat-value" style={{ fontSize: '1.8rem' }}>{datasets.length}</div>
@@ -80,12 +79,6 @@ const Dataset = () => {
         <div className="card stat-card">
           <div className="stat-label">Total Historical Purchases</div>
           <div className="stat-value" style={{ fontSize: '1.8rem' }}>{totalTransactions.toLocaleString()}</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-label">Privacy Scope</div>
-          <div className="stat-value" style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981', fontWeight: '700' }}>
-            <Lock size={18} /> Account Owner Only
-          </div>
         </div>
       </div>
 
@@ -112,7 +105,7 @@ const Dataset = () => {
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ position: 'sticky', top: 0, background: '#13151f', zIndex: 10, borderBottom: '1px solid var(--border-color)' }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'var(--table-header-bg)', zIndex: 10, borderBottom: '1px solid var(--border-color)' }}>
                 <tr>
                   <th style={{ textAlign: 'left', padding: '1rem 1.5rem', width: '55%' }}>File Name</th>
                   <th style={{ textAlign: 'left', padding: '1rem 1.5rem', width: '30%' }}>Date Uploaded</th>
@@ -121,7 +114,7 @@ const Dataset = () => {
               </thead>
               <tbody>
                 {datasets.map((ds) => (
-                  <tr key={ds.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <tr key={ds.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ textAlign: 'left', padding: '0.9rem 1.5rem' }}>
                       <div 
                         onClick={() => handleSelectFile(ds)}
@@ -139,7 +132,7 @@ const Dataset = () => {
                         title="Click to look back on this file and rerun analytics"
                       >
                         <FileText size={18} style={{ color: 'var(--primary-color)', flexShrink: 0 }} />
-                        <span style={{ fontWeight: '700', color: '#fff', textDecoration: 'underline', textUnderlineOffset: '4px' }}>
+                        <span style={{ fontWeight: '700', color: 'var(--text-main)', textDecoration: 'underline', textUnderlineOffset: '4px' }}>
                           {ds.name}
                         </span>
                         <span style={{ 
