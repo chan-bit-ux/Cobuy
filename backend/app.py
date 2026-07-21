@@ -8,6 +8,11 @@ import math
 import tracemalloc
 import hashlib
 import logging
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta, timezone
 from mlxtend.frequent_patterns import apriori, fpgrowth, association_rules
 from mlxtend.preprocessing import TransactionEncoder
 
@@ -63,6 +68,102 @@ def get_current_user_email():
     if email:
         return email.strip().lower()
     return None
+
+def get_current_user():
+    """Return the full user dict for the requester, or None."""
+    email = get_current_user_email()
+    if not email:
+        return None
+    return db.get_user(email)
+
+def _get_store_id_for_user(user_info):
+    """Resolve store_id: shop_admin owns a store; team_member belongs to one."""
+    if not user_info:
+        return None
+    store_id = user_info.get('store_id')
+    if store_id:
+        return store_id
+    # shop_admin: look up store by ownership
+    if user_info.get('role') == 'shop_admin':
+        store = db.get_store_by_owner(user_info['email'])
+        return store['id'] if store else None
+    return None
+
+def _require_shop_admin(user_info):
+    """
+    Server-side guard: return 403 unless the user's role column is 'shop_admin'.
+    Authorization is based solely on the role column — never on email strings.
+    """
+    if not user_info or user_info.get('role') != 'shop_admin':
+        return jsonify({'error': 'Forbidden: shop administrator access required'}), 403
+    return None
+
+# Keep legacy alias so existing call-sites continue to work
+_require_admin = _require_shop_admin
+
+def _log_current_user_action(action, details_dict=None):
+    """Convenience wrapper — resolves store_id automatically."""
+    user_info = get_current_user()
+    if not user_info:
+        return
+    store_id = _get_store_id_for_user(user_info)
+    db.log_activity(store_id, user_info['email'], action, details_dict)
+
+# ── Email helper ─────────────────────────────────────────────────────────────
+
+def send_invitation_email(to_email, store_name, invite_url, invited_by_name='Your Store Admin'):
+    """
+    Send an invitation email.
+    Reads SMTP config from env vars; gracefully falls back to console log
+    in development when SMTP_HOST is not set.
+    """
+    smtp_host = os.environ.get('SMTP_HOST', '')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER', '')
+    smtp_pass = os.environ.get('SMTP_PASS', '')
+    from_email = os.environ.get('FROM_EMAIL', smtp_user or 'noreply@cobuy.app')
+
+    subject = f"You're invited to join {store_name} on Cobuy"
+    body_html = f"""
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+      <h2 style="color:#3b82f6">You have been invited!</h2>
+      <p><strong>{invited_by_name}</strong> has invited you to join
+         <strong>{store_name}</strong> on Cobuy.</p>
+      <p>Click the button below to accept your invitation (valid for 48 hours):</p>
+      <a href="{invite_url}"
+         style="display:inline-block;padding:12px 28px;background:#3b82f6;
+                color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+        Accept Invitation
+      </a>
+      <p style="margin-top:24px;font-size:0.85rem;color:#888">
+        Or log in to your Cobuy account — your bell notification will also show the invite.
+      </p>
+    </div>
+    """
+
+    if not smtp_host:
+        # Development fallback — print to console
+        logger.info(f"[EMAIL FALLBACK] To: {to_email} | Subject: {subject}")
+        logger.info(f"[EMAIL FALLBACK] Invite URL: {invite_url}")
+        return True
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From']    = from_email
+        msg['To']      = to_email
+        msg.attach(MIMEText(body_html, 'html'))
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.ehlo()
+            server.starttls()
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.sendmail(from_email, [to_email], msg.as_string())
+        return True
+    except Exception as e:
+        logger.warning(f"[EMAIL ERROR] Failed to send invite email to {to_email}: {e}")
+        return False
 
 # Storage for runtime/transient results
 data_store = {
@@ -255,7 +356,7 @@ def index():
 @app.route('/api/login', methods=['POST'])
 def login():
     params = request.json or {}
-    email = params.get('email', '').strip().lower()
+    email    = params.get('email', '').strip().lower()
     password = params.get('password', '')
 
     if not email or not password:
@@ -265,22 +366,38 @@ def login():
     if not user_info or user_info['password'] != password:
         return jsonify({'error': 'Invalid email or password'}), 401
 
+    store_id   = _get_store_id_for_user(user_info)
+    store_name = None
+    if store_id:
+        store      = db.get_store_by_id(store_id)
+        store_name = store['name'] if store else None
+
+    # role column is the authoritative source (shop_admin | team_member)
+    role         = user_info.get('role') or 'shop_admin'
+    account_type = user_info.get('account_type') or 'admin'
+    status       = user_info.get('status') or 'active'
+
     return jsonify({
         'token': f'mock-jwt-token-{email}',
         'user': {
-            'email': email,
-            'name': user_info['name'],
-            'role': user_info['role']
+            'email':        email,
+            'name':         user_info['name'],
+            'role':         role,
+            'account_type': account_type,
+            'status':       status,
+            'store_id':     store_id,
+            'store_name':   store_name
         }
     })
 
 @app.route('/api/register', methods=['POST'])
 def register():
     params = request.json or {}
-    email = params.get('email', '').strip().lower()
-    password = params.get('password', '')
-    name = params.get('name', '').strip()
-    role = params.get('role', 'Data Analyst').strip()
+    email        = params.get('email', '').strip().lower()
+    password     = params.get('password', '')
+    name         = params.get('name', '').strip()
+    account_type = params.get('account_type', 'admin').strip()  # 'admin' | 'member'
+    store_name   = params.get('store_name', '').strip()         # Required if admin
 
     if not email or not password or not name:
         return jsonify({'error': 'Email, password, and name are required'}), 400
@@ -288,19 +405,49 @@ def register():
     if len(password) < 6:
         return jsonify({'error': 'Password must be at least 6 characters long'}), 400
 
-    success = db.create_user(email, password, name, role)
-    if not success:
-        return jsonify({'error': 'Email is already registered'}), 409
+    if account_type == 'admin' and not store_name:
+        return jsonify({'error': 'Store name is required for Shop Administrators'}), 400
 
-    return jsonify({
-        'message': 'Registration successful',
-        'token': f'mock-jwt-token-{email}',
-        'user': {
-            'email': email,
-            'name': name,
-            'role': role
-        }
-    }), 201
+    if account_type == 'member':
+        # Team members register with pending status — no store until they accept an invite
+        success = db.create_user(email, password, name, 'team_member',
+                                 account_type='member', store_id=None, status='pending')
+        if not success:
+            return jsonify({'error': 'Email is already registered'}), 409
+        return jsonify({
+            'message': 'Registration successful. Awaiting administrator invitation.',
+            'pending': True,
+            'user': {
+                'email': email,
+                'name': name,
+                'role': 'team_member',
+                'account_type': 'member',
+                'status': 'pending'
+            }
+        }), 201
+    else:
+        # Shop Administrator: create user + store atomically
+        success = db.create_user(email, password, name, 'shop_admin',
+                                 account_type='admin', store_id=None, status='active')
+        if not success:
+            return jsonify({'error': 'Email is already registered'}), 409
+
+        store_id = db.create_store(store_name, email)
+        db.update_user_store(email, store_id, status='active')
+
+        return jsonify({
+            'message': 'Registration successful',
+            'token': f'mock-jwt-token-{email}',
+            'user': {
+                'email': email,
+                'name': name,
+                'role': 'shop_admin',
+                'account_type': 'admin',
+                'status': 'active',
+                'store_id': store_id,
+                'store_name': store_name
+            }
+        }), 201
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
@@ -366,6 +513,17 @@ def upload_file():
         
         # Store new transactions without clearing other datasets
         db.add_transactions(transactions, dataset_id=ds_id, user_email=user_email, basket_values=basket_values_list)
+
+        # ── Audit log ────────────────────────────────────────────────────────
+        _log_current_user_action('UPLOAD_HISTORICAL_DATA', {
+            'filename': file.filename,
+            'transaction_count': total_tx,
+            'unique_items': unique_items_count,
+            'market_type': market_type,
+            'missing_values_removed': missing_removed,
+            'duplicates_removed': duplicates_removed,
+            'dataset_id': ds_id
+        })
         
         return jsonify({
             'message': 'File cleaned and processed successfully',
@@ -815,7 +973,17 @@ def get_datasets():
 @app.route('/api/datasets/<int:dataset_id>', methods=['DELETE'])
 def delete_dataset_endpoint(dataset_id):
     user_email = get_current_user_email()
+    # Capture dataset info before deletion for the audit log
+    dataset_info_before = db.get_dataset_by_id(dataset_id, user_email=user_email)
     db.delete_dataset(dataset_id, user_email=user_email)
+    # ── Audit log ────────────────────────────────────────────────────────────
+    if dataset_info_before:
+        _log_current_user_action('PURGE_HISTORICAL_DATA', {
+            'dataset_id': dataset_id,
+            'filename': dataset_info_before.get('name'),
+            'transaction_count': dataset_info_before.get('transaction_count'),
+            'market_type': dataset_info_before.get('market_type')
+        })
     return jsonify({'message': 'Dataset deleted successfully'})
 
 @app.route('/api/history/<int:dataset_id>/activate', methods=['POST'])
@@ -945,9 +1113,11 @@ def get_trends():
 
 @app.route('/api/benchmark', methods=['POST'])
 def run_benchmark():
+    user_info = get_current_user()
+    err = _require_shop_admin(user_info)
+    if err:
+        return err
     user_email = get_current_user_email()
-    if not user_email or user_email.lower() != 'admin@ruleminer.ai':
-        return jsonify({'error': 'Unauthorized. Evaluation is restricted to admin users.'}), 403
 
     params = request.json or {}
     dataset_id = params.get('dataset_id') or request.args.get('dataset_id')
@@ -1086,6 +1256,465 @@ def clear_data():
         'transaction_count': 0,
         'unique_items': 0
     })
+
+# ── Invitation Pipeline (v2) ──────────────────────────────────────────────────
+from urllib.parse import urlparse, parse_qs
+
+def _extract_token(raw):
+    """
+    Accept either a bare token string or a full URL containing ?token=<value>.
+    Returns the token string, or None if nothing usable is found.
+    """
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    # If it looks like a URL, try to pull ?token= out of the query string
+    if raw.startswith('http://') or raw.startswith('https://') or '?' in raw:
+        try:
+            parsed = urlparse(raw)
+            qs = parse_qs(parsed.query)
+            tokens = qs.get('token', [])
+            if tokens:
+                return tokens[0].strip()
+        except Exception:
+            pass
+    # Treat as raw token
+    return raw
+
+
+# ── v1 versioned endpoints ────────────────────────────────────────────────────
+
+@app.route('/api/v1/invitations/generate', methods=['POST'])
+def v1_generate_invitation():
+    """
+    Shop admin sends an invitation to a specific email address.
+    Creates an invitation row, an in-app notification for the invitee,
+    and sends an email with the accept link.
+    Authorization is based solely on role='shop_admin' — not on email strings.
+    """
+    user_info = get_current_user()
+    err = _require_shop_admin(user_info)
+    if err:
+        return err
+
+    store_id = _get_store_id_for_user(user_info)
+    if not store_id:
+        return jsonify({'error': 'No store associated with your account.'}), 400
+
+    params         = request.json or {}
+    invited_email  = params.get('email', '').strip().lower()
+    max_uses       = int(params.get('max_uses', 1))
+
+    if not invited_email:
+        return jsonify({'error': 'Email address is required to send an invitation.'}), 400
+    if '@' not in invited_email:
+        return jsonify({'error': 'Please provide a valid email address.'}), 400
+
+    token      = secrets.token_hex(32)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%d %H:%M:%S')
+
+    db.create_invitation(
+        invited_email=invited_email,
+        token=token,
+        store_id=store_id,
+        expires_at=expires_at,
+        invited_by=user_info['email'],
+        role='team_member',
+        max_uses=max_uses
+    )
+
+    # Get the invitation id for the notification reference
+    inv = db.get_invitation_by_token(token)
+    inv_id = inv['id'] if inv else None
+
+    # Create in-app notification for the invited user (if they have an account)
+    invitee = db.get_user(invited_email)
+    if invitee and inv_id:
+        db.create_notification(invited_email, 'invitation_received', reference_id=inv_id)
+
+    # Send email (falls back to console log in dev)
+    store      = db.get_store_by_id(store_id)
+    store_name = store['name'] if store else 'the store'
+    invite_url = f'{request.host_url.rstrip("/")}/join?token={token}'
+    send_invitation_email(
+        to_email       = invited_email,
+        store_name     = store_name,
+        invite_url     = invite_url,
+        invited_by_name= user_info.get('name', user_info['email'])
+    )
+
+    # Audit log
+    _log_current_user_action('invitation_sent', {
+        'invited_email': invited_email,
+        'store_id':      store_id,
+        'token_prefix':  token[:8],
+        'expires_at':    expires_at
+    })
+
+    return jsonify({
+        'message': f'Invitation sent to {invited_email}',
+        'invite_url': f'/join?token={token}',
+        'token': token,
+        'expires_at': expires_at,
+        'max_uses': max_uses
+    }), 201
+
+
+@app.route('/api/v1/invitations/consume', methods=['POST'])
+def v1_consume_invitation():
+    """
+    Authenticated member submits a token (raw or full URL) to join a store via email link.
+    Validates: active, not expired, under usage limit.
+    """
+    member_email = get_current_user_email()
+    if not member_email:
+        return jsonify({'error': 'You must be logged in to consume an invitation.'}), 401
+
+    params    = request.json or {}
+    raw_input = params.get('token') or params.get('token_or_url') or ''
+    token     = _extract_token(raw_input)
+    if not token:
+        return jsonify({'error': 'A token or invitation link is required.'}), 400
+
+    inv = db.get_invitation_by_token(token)
+    if not inv:
+        return jsonify({'error': 'Invalid invitation token.'}), 403
+
+    max_uses   = inv.get('max_uses', 1) or 1
+    uses_count = inv.get('uses_count', 0) or 0
+    is_active  = inv.get('is_active', 1)
+    if not is_active or uses_count >= max_uses:
+        return jsonify({'error': 'This invitation link has already been fully used.'}), 403
+
+    try:
+        expires_at = datetime.strptime(inv['expires_at'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            return jsonify({'error': 'This invitation link has expired (valid for 48 hours).'}), 403
+    except Exception:
+        return jsonify({'error': 'Could not validate token expiry.'}), 500
+
+    member_user = db.get_user(member_email)
+    if not member_user:
+        return jsonify({'error': 'User account not found. Please register first.'}), 404
+
+    store_id = db.consume_invitation(token, member_email)
+    if not store_id:
+        return jsonify({'error': 'Failed to consume invitation. Please try again.'}), 500
+
+    store        = db.get_store_by_id(store_id)
+    updated_user = db.get_user(member_email)
+
+    # Mark related notification as read
+    inv_id = inv.get('id')
+    if inv_id:
+        notifs = db.get_notifications_for_user(member_email, include_read=True)
+        for n in notifs:
+            if n.get('reference_id') == inv_id:
+                db.mark_notification_read(n['id'], member_email)
+                break
+
+    # Notify the store admin that member accepted
+    store_admin_email = inv.get('invited_by')
+    if store_admin_email:
+        db.create_notification(store_admin_email, 'invitation_accepted', reference_id=inv_id)
+
+    _log_current_user_action('invitation_accepted', {
+        'store_id':   store_id,
+        'store_name': store['name'] if store else None,
+        'token_prefix': token[:8]
+    })
+
+    return jsonify({
+        'message': 'You have successfully joined the store.',
+        'token': f'mock-jwt-token-{member_email}',
+        'user': {
+            'email':        member_email,
+            'name':         updated_user['name'],
+            'role':         updated_user.get('role', 'team_member'),
+            'account_type': updated_user.get('account_type', 'member'),
+            'status':       'active',
+            'store_id':     store_id,
+            'store_name':   store['name'] if store else None
+        }
+    })
+
+
+@app.route('/api/v1/invitations/<int:invitation_id>/accept', methods=['POST'])
+def v1_accept_invitation_by_id(invitation_id):
+    """
+    Team member accepts an invitation directly from the notification bell.
+    No token needed — uses the invitation database ID.
+    """
+    member_email = get_current_user_email()
+    if not member_email:
+        return jsonify({'error': 'Authentication required.'}), 401
+
+    inv = db.get_invitation_by_id(invitation_id)
+    if not inv:
+        return jsonify({'error': 'Invitation not found.'}), 404
+
+    # Verify this invite was meant for this user
+    if inv.get('invited_email') and inv['invited_email'].lower() != member_email.lower():
+        return jsonify({'error': 'This invitation was not sent to your account.'}), 403
+
+    # Expiry check
+    try:
+        expires_at = datetime.strptime(inv['expires_at'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            return jsonify({'error': 'This invitation has expired (valid for 48 hours).'}), 403
+    except Exception:
+        return jsonify({'error': 'Could not validate expiry.'}), 500
+
+    store_id = db.consume_invitation_by_id(invitation_id, member_email)
+    if not store_id:
+        return jsonify({'error': 'Failed to accept invitation. It may have already been used.'}), 400
+
+    store        = db.get_store_by_id(store_id)
+    updated_user = db.get_user(member_email)
+
+    # Mark notification as read
+    notifs = db.get_notifications_for_user(member_email, include_read=True)
+    for n in notifs:
+        if n.get('reference_id') == invitation_id:
+            db.mark_notification_read(n['id'], member_email)
+            break
+
+    # Notify the admin
+    store_admin_email = inv.get('invited_by')
+    if store_admin_email:
+        db.create_notification(store_admin_email, 'invitation_accepted', reference_id=invitation_id)
+
+    _log_current_user_action('invitation_accepted', {
+        'invitation_id': invitation_id,
+        'store_id':      store_id,
+        'store_name':    store['name'] if store else None
+    })
+
+    return jsonify({
+        'message': f'You have joined {store["name"] if store else "the store"} successfully.',
+        'token': f'mock-jwt-token-{member_email}',
+        'user': {
+            'email':        member_email,
+            'name':         updated_user['name'],
+            'role':         updated_user.get('role', 'team_member'),
+            'account_type': updated_user.get('account_type', 'member'),
+            'status':       'active',
+            'store_id':     store_id,
+            'store_name':   store['name'] if store else None
+        }
+    })
+
+
+@app.route('/api/v1/invitations/<int:invitation_id>/decline', methods=['POST'])
+def v1_decline_invitation_by_id(invitation_id):
+    """
+    Team member declines an invitation from the notification bell.
+    """
+    member_email = get_current_user_email()
+    if not member_email:
+        return jsonify({'error': 'Authentication required.'}), 401
+
+    inv = db.get_invitation_by_id(invitation_id)
+    if not inv:
+        return jsonify({'error': 'Invitation not found.'}), 404
+
+    if inv.get('invited_email') and inv['invited_email'].lower() != member_email.lower():
+        return jsonify({'error': 'This invitation was not sent to your account.'}), 403
+
+    db.decline_invitation_by_id(invitation_id)
+
+    # Mark notification as read
+    notifs = db.get_notifications_for_user(member_email, include_read=True)
+    for n in notifs:
+        if n.get('reference_id') == invitation_id:
+            db.mark_notification_read(n['id'], member_email)
+            break
+
+    # Notify the admin of the decline
+    store_admin_email = inv.get('invited_by')
+    if store_admin_email:
+        db.create_notification(store_admin_email, 'invitation_declined', reference_id=invitation_id)
+
+    _log_current_user_action('invitation_declined', {
+        'invitation_id': invitation_id,
+        'store_id':      inv.get('store_id')
+    })
+
+    return jsonify({'message': 'Invitation declined.'})
+
+
+# ── Legacy aliases (backward compat) ─────────────────────────────────────────
+
+@app.route('/api/invitations/create', methods=['POST'])
+def create_invitation():
+    """Legacy alias → v1_generate_invitation."""
+    return v1_generate_invitation()
+
+
+@app.route('/api/invitations/accept', methods=['POST'])
+def accept_invitation():
+    """Legacy alias — still email-aware for the old JoinPage flow."""
+    params = request.json or {}
+    token = _extract_token(params.get('token', ''))
+    if not token:
+        return jsonify({'error': 'Token is required'}), 400
+
+    inv = db.get_invitation_by_token(token)
+    if not inv:
+        return jsonify({'error': 'Invalid invitation token'}), 403
+
+    max_uses   = inv.get('max_uses', 1) or 1
+    uses_count = inv.get('uses_count', 0) or 0
+    is_active  = inv.get('is_active', 1)
+    if not is_active or uses_count >= max_uses:
+        return jsonify({'error': 'This invitation link has already been used'}), 403
+
+    try:
+        expires_at = datetime.strptime(inv['expires_at'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            return jsonify({'error': 'This invitation link has expired (valid for 48 hours)'}), 403
+    except Exception:
+        return jsonify({'error': 'Could not validate token expiry'}), 500
+
+    member_email = get_current_user_email()
+    if not member_email:
+        store = db.get_store_by_id(inv['store_id'])
+        return jsonify({
+            'requires_login': True,
+            'store_id': inv['store_id'],
+            'store_name': store['name'] if store else None,
+            'invited_email': inv.get('email')
+        })
+
+    member_user = db.get_user(member_email)
+    if not member_user:
+        return jsonify({'error': 'User account not found. Please register first.'}), 404
+
+    store_id = db.consume_invitation(token, member_email)
+    if not store_id:
+        return jsonify({'error': 'Failed to accept invitation'}), 500
+
+    store = db.get_store_by_id(store_id)
+    updated_user = db.get_user(member_email)
+    return jsonify({
+        'message': 'Invitation accepted successfully. Your account is now active.',
+        'token': f'mock-jwt-token-{member_email}',
+        'user': {
+            'email': member_email,
+            'name': updated_user['name'],
+            'role': updated_user['role'],
+            'account_type': 'member',
+            'status': 'active',
+            'store_id': store_id,
+            'store_name': store['name'] if store else None
+        }
+    })
+
+
+@app.route('/api/invitations', methods=['GET'])
+def list_invitations():
+    """Admin lists active invitations for their store."""
+    user_info = get_current_user()
+    err = _require_admin(user_info)
+    if err:
+        return err
+
+    store_id = _get_store_id_for_user(user_info)
+    if not store_id:
+        return jsonify({'invitations': []})
+
+    invitations = db.get_pending_invitations(store_id)
+    return jsonify({'invitations': invitations})
+
+
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+
+@app.route('/api/notifications', methods=['GET'])
+def get_notifications():
+    """Return unread notifications for the current user."""
+    user_email = get_current_user_email()
+    if not user_email:
+        return jsonify({'error': 'Authentication required.'}), 401
+    include_read = request.args.get('include_read', 'false').lower() == 'true'
+    notifs = db.get_notifications_for_user(user_email, include_read=include_read)
+    unread_count = db.get_unread_notification_count(user_email)
+    return jsonify({'notifications': notifs, 'unread_count': unread_count})
+
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['PATCH', 'POST'])
+def mark_notification_read_endpoint(notification_id):
+    """Mark a single notification as read."""
+    user_email = get_current_user_email()
+    if not user_email:
+        return jsonify({'error': 'Authentication required.'}), 401
+    db.mark_notification_read(notification_id, user_email)
+    return jsonify({'message': 'Notification marked as read.'})
+
+
+@app.route('/api/notifications/read-all', methods=['PATCH', 'POST'])
+def mark_all_notifications_read_endpoint():
+    """Mark all notifications for the current user as read."""
+    user_email = get_current_user_email()
+    if not user_email:
+        return jsonify({'error': 'Authentication required.'}), 401
+    db.mark_all_notifications_read(user_email)
+    return jsonify({'message': 'All notifications marked as read.'})
+
+
+# ── Activity Audit Log ────────────────────────────────────────────────────────
+
+@app.route('/api/activity-logs', methods=['GET'])
+def get_activity_logs():
+    """Return audit logs scoped strictly to the admin's store."""
+    user_info = get_current_user()
+    err = _require_admin(user_info)
+    if err:
+        return err
+
+    store_id = _get_store_id_for_user(user_info)
+    if not store_id:
+        return jsonify({'logs': [], 'users': []})
+
+    user_email_filter = request.args.get('user_email') or None
+    start_date = request.args.get('start_date') or None
+    end_date = request.args.get('end_date') or None
+
+    logs = db.get_activity_logs(
+        store_id=store_id,
+        user_email_filter=user_email_filter,
+        start_date=start_date,
+        end_date=end_date,
+        limit=200
+    )
+
+    # Parse the details JSON string back to dict for the response
+    for log in logs:
+        if log.get('details'):
+            try:
+                log['details'] = json.loads(log['details'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    users = db.get_store_users_for_filter(store_id)
+    return jsonify({'logs': logs, 'users': users})
+
+
+@app.route('/api/store/members', methods=['GET'])
+def get_store_members():
+    """Return team members of the current admin's store."""
+    user_info = get_current_user()
+    err = _require_admin(user_info)
+    if err:
+        return err
+
+    store_id = _get_store_id_for_user(user_info)
+    if not store_id:
+        return jsonify({'members': []})
+
+    members = db.get_store_members(store_id)
+    return jsonify({'members': members})
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
