@@ -31,8 +31,8 @@
   --badge-bg: rgba(255, 255, 255, 0.05);
   --table-header-bg: #13151f;
 
-  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 1px 1px 0px 0px rgba(255, 255, 255, 0.08);
-  --card-hover-shadow: 0 16px 36px rgba(59, 130, 246, 0.15), inset 1px 1px 0px 0px rgba(255, 255, 255, 0.15);
+  --card-shadow: none;
+  --card-hover-shadow: none;
   --bg-gradient: radial-gradient(circle at 15% 10%, rgba(59, 130, 246, 0.08) 0%, transparent 45%),
                  radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.08) 0%, transparent 45%);
 
@@ -75,19 +75,28 @@
   --badge-bg: #f1f5f9;
   --table-header-bg: #f1f5f9;
 
-  --card-shadow: 0 4px 20px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
-  --card-hover-shadow: 0 12px 30px rgba(79, 70, 229, 0.1), 0 4px 10px rgba(15, 23, 42, 0.04);
+  --card-shadow: none;
+  --card-hover-shadow: none;
   --bg-gradient: radial-gradient(circle at 15% 10%, rgba(79, 70, 229, 0.06) 0%, transparent 45%),
                  radial-gradient(circle at 85% 85%, rgba(124, 58, 237, 0.06) 0%, transparent 45%);
 }
 
-/* Auto-adapt inline white/#fff text color when in light mode */
-[data-theme="light"] [style*="color: #fff"],
-[data-theme="light"] [style*="color: white"],
-[data-theme="light"] [style*="color: rgb(255, 255, 255)"],
-[data-theme="light"] [style*="color: '#fff'"],
-[data-theme="light"] [style*="color: 'white'"] {
+/* Auto-adapt inline white/#fff text color when in light mode (excluding buttons and their contents) */
+[data-theme="light"] *:not(button):not(button *):not(.btn):not(.btn *)[style*="color: #fff"],
+[data-theme="light"] *:not(button):not(button *):not(.btn):not(.btn *)[style*="color: white"],
+[data-theme="light"] *:not(button):not(button *):not(.btn):not(.btn *)[style*="color: rgb(255, 255, 255)"],
+[data-theme="light"] *:not(button):not(button *):not(.btn):not(.btn *)[style*="color: '#fff'"],
+[data-theme="light"] *:not(button):not(button *):not(.btn):not(.btn *)[style*="color: 'white'"] {
   color: var(--text-main) !important;
+}
+
+/* Explicitly force white text and icons for primary/purple buttons in all modes */
+.btn-primary,
+.btn-primary *,
+button[style*="background: linear-gradient"],
+button[style*="background: linear-gradient"] * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
 }
 
 [data-theme="light"] [style*="color: rgba(255,255,255"],
@@ -218,7 +227,6 @@ pre,
 .nav-link.active {
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active);
-  transform: translateX(4px);
 }
 
 /* Main Content */
@@ -247,36 +255,11 @@ pre,
   overflow: hidden;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  transition: var(--transition);
 }
 
 .page-header:hover {
-  border-color: rgba(99, 102, 241, 0.25);
-  box-shadow: var(--card-hover-shadow);
-}
-
-.page-header::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  background: linear-gradient(180deg, var(--primary-color), var(--accent-color));
-  box-shadow: 0 0 16px var(--primary-color);
-}
-
-.page-header::after {
-  content: '';
-  position: absolute;
-  right: -60px;
-  top: -60px;
-  width: 250px;
-  height: 250px;
-  background: radial-gradient(circle, var(--primary-color) 0%, transparent 70%);
-  opacity: 0.12;
-  pointer-events: none;
-  border-radius: 50%;
+  border-color: var(--border-color);
+  box-shadow: var(--card-shadow);
 }
 
 .page-title {
@@ -331,7 +314,7 @@ pre,
   align-items: flex-end;
 }
 
-/* Card Styling with Lively Elevation */
+/* Card Styling */
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -340,13 +323,11 @@ pre,
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: var(--card-shadow);
-  transition: var(--transition);
 }
 
 .card:hover {
-  box-shadow: var(--card-hover-shadow);
-  transform: translateY(-3px);
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: var(--border-color);
+  box-shadow: var(--card-shadow);
 }
 
 /* Form Controls */
@@ -381,7 +362,31 @@ pre,
 .select:focus {
   border-color: var(--primary-color);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--card-bg) inset !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+[data-theme="light"] input:-webkit-autofill,
+[data-theme="light"] input:-webkit-autofill:hover,
+[data-theme="light"] input:-webkit-autofill:focus,
+[data-theme="light"] input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #f1f5f9 inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+[data-theme="dark"] input:-webkit-autofill,
+[data-theme="dark"] input:-webkit-autofill:hover,
+[data-theme="dark"] input:-webkit-autofill:focus,
+[data-theme="dark"] input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+  -webkit-text-fill-color: #f8fafc !important;
 }
 
 .help-text {
@@ -398,7 +403,6 @@ pre,
   font-weight: 600;
   font-size: 1rem;
   cursor: pointer;
-  transition: var(--transition);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -409,13 +413,11 @@ pre,
   background-color: var(--primary-color);
   color: #ffffff;
   border-color: var(--primary-color);
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
+  box-shadow: none;
 }
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-  transform: translateY(-2px);
 }
 
 .btn-secondary {
@@ -437,8 +439,6 @@ pre,
 .btn-danger:hover {
   background-color: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.4);
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.2);
-  transform: translateY(-1px);
 }
 
 .btn-action {
@@ -642,4 +642,30 @@ input[type=number] {
 
 .history-scroll-box::-webkit-scrollbar-thumb:hover {
   background: var(--primary-hover);
+}
+
+/* Printable PDF & Window Print Styles */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .sidebar,
+  header,
+  .page-header button,
+  .btn,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  .card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    color: #000000 !important;
+    break-inside: avoid;
+  }
+  .page-title, h1, h2, h3, h4, td, th {
+    color: #000000 !important;
+  }
 }

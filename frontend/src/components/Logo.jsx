@@ -47,42 +47,13 @@ const Logo = ({ size = 'md', showSubtitle = false, className = '' }) => {
           cursor: 'pointer'
         }}
       >
-        {/* Executive CB Logo Badge */}
-        <div
-          style={{
-            width: config.iconSize,
-            height: config.iconSize,
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 15px -3px rgba(99, 102, 241, 0.55)',
-            border: '1px solid rgba(255, 255, 255, 0.22)',
-            flexShrink: 0
-          }}
-        >
-          <span
-            style={{
-              fontWeight: '900',
-              fontSize: config.badgeFontSize,
-              color: '#ffffff',
-              letterSpacing: '-0.07em',
-              lineHeight: 1,
-              fontFamily: 'Outfit, Inter, system-ui, sans-serif'
-            }}
-          >
-            CB
-          </span>
-        </div>
-
         {/* CoBuy Brand Wordmark */}
         <span
           style={{
             fontWeight: '800',
             fontSize: config.fontSize,
-            color: '#ffffff',
-            letterSpacing: '-0.04em',
+            color: 'var(--text-main)',
+            letterSpacing: '-0.03em',
             lineHeight: 1,
             fontFamily: 'Outfit, Inter, system-ui, sans-serif'
           }}

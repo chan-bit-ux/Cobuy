@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   Cpu,
@@ -11,9 +12,15 @@ import {
   CheckCircle2,
   AlertTriangle,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
   BookOpen,
-  HelpCircle
+  HelpCircle,
+  Database,
+  Upload,
+  User,
+  ShieldCheck,
+  ScrollText,
+  Download
 } from 'lucide-react';
 import {
   XAxis,
@@ -29,10 +36,23 @@ import {
 const API_BASE = 'http://localhost:5000/api';
 
 const Evaluation = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isRunning, setIsRunning] = useState(false);
+  const [runningDatasetId, setRunningDatasetId] = useState(null);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('friendly'); // 'friendly' or 'technical'
   const [showAnalogyPopover, setShowAnalogyPopover] = useState(false);
+
+  // Upload logs and datasets state for Admin table
+  const [uploadLogs, setUploadLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [exportingStates, setExportingStates] = useState({});
+
+  // Active dataset state
+  const [activeDatasetId, setActiveDatasetId] = useState(() => localStorage.getItem('activeDatasetId') || null);
+  const [activeDatasetName, setActiveDatasetName] = useState(() => localStorage.getItem('activeDatasetName') || null);
 
   const [params, setParams] = useState(() => {
     const analyticsSaved = sessionStorage.getItem('analytics_params');
@@ -55,15 +75,188 @@ const Evaluation = () => {
     return saved ? JSON.parse(saved) : null;
   });
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }) + ', ' + d.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const handleExportResult = async (datasetId, filename) => {
+    if (!datasetId) {
+      alert('Dataset ID not found for this upload record.');
+      return;
+    }
+    try {
+      setExportingStates(prev => ({ ...prev, [datasetId]: true }));
+      const token = localStorage.getItem('token') || '';
+      const userEmail = localStorage.getItem('userEmail') || '';
+      
+      const response = await axios.get(`${API_BASE}/admin/uploads/${datasetId}/export`, {
+        responseType: 'blob',
+        headers: {
+          'Authorization': token ? (token.startsWith('Bearer ') ? token : `Bearer ${token}`) : '',
+          'X-User-Email': userEmail
+        }
+      });
+
+      const blob = new Blob([response.data], { type: response.headers['content-type'] || 'text/csv' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const cleanName = filename ? filename.replace(/\.[^/.]+$/, "") : `upload_${datasetId}`;
+      link.setAttribute('download', `recommendation_results_${cleanName}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Failed to download export result:', error);
+      alert('Failed to download export result. Please ensure administrator access.');
+    } finally {
+      setExportingStates(prev => ({ ...prev, [datasetId]: false }));
+    }
+  };
+
+  const fetchEvaluationData = async () => {
+    setLoadingLogs(true);
+    try {
+      const [logsRes, datasetsRes] = await Promise.allSettled([
+        axios.get(`${API_BASE}/activity-logs`),
+        axios.get(`${API_BASE}/datasets`)
+      ]);
+
+      let logsList = [];
+      if (logsRes.status === 'fulfilled' && logsRes.value.data?.logs) {
+        logsList = logsRes.value.data.logs.filter(l => l.action === 'UPLOAD_HISTORICAL_DATA');
+      }
+
+      let datasetsList = [];
+      if (datasetsRes.status === 'fulfilled' && datasetsRes.value.data?.datasets) {
+        datasetsList = datasetsRes.value.data.datasets;
+      }
+
+      const mergedList = [];
+      const seenDatasetIds = new Set();
+
+      logsList.forEach(log => {
+        const dsId = log.details?.dataset_id;
+        if (dsId) seenDatasetIds.add(String(dsId));
+        mergedList.push({
+          id: log.id,
+          dataset_id: dsId,
+          timestamp: log.created_at,
+          user_name: log.user_name || log.user_email || 'Shop Administrator',
+          user_email: log.user_email || 'admin@store.com',
+          filename: log.details?.filename || 'transaction_data.csv',
+          transaction_count: log.details?.transaction_count || 0,
+          market_type: log.details?.market_type || 'Default',
+          details: log.details
+        });
+      });
+
+      datasetsList.forEach(ds => {
+        if (!seenDatasetIds.has(String(ds.id))) {
+          mergedList.push({
+            id: `ds-${ds.id}`,
+            dataset_id: ds.id,
+            timestamp: ds.upload_date || new Date().toISOString(),
+            user_name: 'Store Administrator',
+            user_email: 'admin@store.com',
+            filename: ds.name,
+            transaction_count: ds.transaction_count || 0,
+            market_type: ds.market_type || 'Default',
+            details: {
+              filename: ds.name,
+              transaction_count: ds.transaction_count,
+              unique_items: ds.unique_items,
+              market_type: ds.market_type,
+              dataset_id: ds.id
+            }
+          });
+        }
+      });
+
+      setUploadLogs(mergedList);
+
+      const currentActiveId = localStorage.getItem('activeDatasetId');
+      if (mergedList.length > 0) {
+        const matching = mergedList.find(item => String(item.dataset_id) === String(currentActiveId));
+        if (matching) {
+          setActiveDatasetId(matching.dataset_id);
+          setActiveDatasetName(matching.filename);
+        } else {
+          setActiveDatasetId(mergedList[0].dataset_id);
+          setActiveDatasetName(mergedList[0].filename);
+          localStorage.setItem('activeDatasetId', mergedList[0].dataset_id);
+          localStorage.setItem('activeDatasetName', mergedList[0].filename);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching evaluation data:", err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvaluationData();
+  }, []);
+
+  useEffect(() => {
+    const shouldAutoRun = location.state?.autoRun || sessionStorage.getItem('autoRunBenchmark') === 'true';
+    if (shouldAutoRun) {
+      sessionStorage.removeItem('autoRunBenchmark');
+      const targetId = location.state?.datasetId || localStorage.getItem('activeDatasetId');
+      const targetName = location.state?.filename || localStorage.getItem('activeDatasetName');
+      handleRunBenchmark(targetId, targetName);
+    }
+  }, [location.state]);
+
   useEffect(() => {
     sessionStorage.setItem('evaluation_params', JSON.stringify(params));
   }, [params]);
 
-  const handleRunBenchmark = async () => {
+  const toggleRow = (id) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleRunBenchmark = async (dsId = null, dsName = null) => {
+    const targetId = dsId || activeDatasetId || localStorage.getItem('activeDatasetId');
+    const targetName = dsName || activeDatasetName || localStorage.getItem('activeDatasetName');
+
+    if (targetId) {
+      localStorage.setItem('activeDatasetId', targetId);
+      setActiveDatasetId(targetId);
+    }
+    if (targetName) {
+      localStorage.setItem('activeDatasetName', targetName);
+      setActiveDatasetName(targetName);
+    }
+
+    setRunningDatasetId(targetId);
     setIsRunning(true);
     setError('');
     setResults(null);
     sessionStorage.removeItem('evaluation_results');
+
     try {
       const analyticsSaved = sessionStorage.getItem('analytics_params');
       let currentParams = params;
@@ -79,21 +272,40 @@ const Evaluation = () => {
       const payload = {
         min_support: parseFloat(currentParams.min_support) || 0.05,
         min_confidence: parseFloat(currentParams.min_confidence) || 0.5,
-        dataset_id: localStorage.getItem('activeDatasetId') || null
+        dataset_id: targetId || null
       };
+
       const response = await axios.post(`${API_BASE}/benchmark`, payload);
       setResults(response.data);
       sessionStorage.setItem('evaluation_results', JSON.stringify(response.data));
+
+      setTimeout(() => {
+        const resultsEl = document.getElementById('benchmark-results-section');
+        if (resultsEl) {
+          resultsEl.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 150);
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Failed to run benchmark. Make sure a dataset is loaded and active.');
     } finally {
       setIsRunning(false);
+      setRunningDatasetId(null);
+    }
+  };
+
+  const handleDeleteDataset = async (datasetId) => {
+    try {
+      await axios.delete(`${API_BASE}/datasets/${datasetId}`);
+      await fetchEvaluationData();
+    } catch (err) {
+      console.error("Error deleting dataset:", err);
     }
   };
 
   const handleClearResults = () => {
     setResults(null);
+    setRunningDatasetId(null);
     sessionStorage.removeItem('evaluation_results');
   };
 
@@ -163,19 +375,39 @@ const Evaluation = () => {
     return (
       <div className="card" style={{
         background: bg,
-        borderColor: `rgba(${color === '#10b981' ? '16, 185, 129' : '245, 158, 11'}, 0.2)`,
+        borderColor: `rgba(${color === '#10b981' ? '16, 185, 129' : '245, 158, 11'}, 0.25)`,
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.75rem',
-        padding: '1.5rem'
+        gap: '0.85rem',
+        padding: '1.5rem 1.75rem'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span style={{ fontSize: '1.5rem' }}>🏆</span>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#fff', margin: 0 }}>
-            {title}
-          </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{ fontSize: '1.5rem' }}>🏆</span>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text-main)', margin: 0 }}>
+              {title}
+            </h3>
+          </div>
+          {(activeDatasetName || activeDatasetId) && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              background: 'rgba(99, 102, 241, 0.12)',
+              border: '1px solid rgba(99, 102, 241, 0.28)',
+              padding: '0.35rem 0.85rem',
+              borderRadius: '20px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              color: 'var(--primary-color)',
+              fontFamily: 'var(--font-mono)'
+            }}>
+              <Database size={14} />
+              <span>Data Upload Evaluated: <strong>{activeDatasetName || `Dataset #${activeDatasetId}`}</strong></span>
+            </div>
+          )}
         </div>
-        <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.85)', lineHeight: '1.5', margin: 0 }}>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.6', margin: 0 }}>
           {desc}
         </p>
       </div>
@@ -572,16 +804,17 @@ const Evaluation = () => {
     <div className="fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title">
-            <Cpu size={28} style={{ color: 'var(--primary-color)' }} />
-            Algorithm Evaluation
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+            <h1 className="page-title" style={{ margin: 0 }}>
+              <Cpu size={28} style={{ color: 'var(--primary-color)' }} />
+              Algorithm Evaluation
+            </h1>
+          </div>
           <p className="page-subtitle">
-            Benchmark Apriori vs FP-Growth using a Paired T-Test across 20 iterations
-            (using Adaptive Store-Specific Thresholds tailored to the active dataset).
+            Automated statistical benchmark of Apriori vs FP-Growth algorithms over 20 iterations.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexShrink: 0, alignItems: 'center' }}>
           {results && !isRunning && (
             <button
               className="btn btn-secondary"
@@ -594,117 +827,385 @@ const Evaluation = () => {
         </div>
       </div>
 
-      {error && (
-        <div className="card" style={{ background: 'rgba(239, 68, 68, 0.05)', borderColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <Info size={20} />
-          <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>{error}</span>
-        </div>
-      )}
-
-      {/* Main Content: Display Area (Full Width) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {isRunning && (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5rem 2rem', background: 'rgba(255, 255, 255, 0.01)', borderStyle: 'dashed', textAlign: 'center', gap: '1.5rem' }}>
-            <RefreshCw size={48} className="spin" style={{ color: 'var(--primary-color)' }} />
+      {/* ── DATA UPLOADS HISTORY TABLE (AUDIT LOG IN EVALUATION) ── */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '2rem' }}>
+        <div style={{
+          display: 'flex',
+          justify: 'space-between',
+          alignItems: 'center',
+          padding: '1.25rem 1.5rem',
+          borderBottom: '1px solid var(--border-color)',
+          background: 'var(--card-bg)',
+          width: '100%'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '10px',
+              background: 'rgba(59, 130, 246, 0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--primary-color)',
+              flexShrink: 0
+            }}>
+              <Upload size={20} />
+            </div>
             <div>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#fff', marginBottom: '0.5rem' }}>Running Performance Benchmark...</h3>
-              <p style={{ color: 'var(--text-muted)', maxWidth: '500px', fontSize: '0.9rem', lineHeight: '1.6', margin: '0 auto' }}>
-                Evaluating Apriori and FP-Growth over 20 recursive runs to calculate statistical significance. This will confirm if speed difference is real or a fluke.
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, color: 'var(--text-main)' }}>
+                  Data Uploads History
+                </h3>
+                <span style={{
+                  background: 'rgba(59, 130, 246, 0.18)',
+                  color: 'var(--primary-color)',
+                  fontSize: '0.75rem',
+                  fontWeight: '700',
+                  padding: '0.15rem 0.6rem',
+                  borderRadius: '100px'
+                }}>
+                  {uploadLogs.length} uploads
+                </span>
+              </div>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Select an uploaded receipt file from the audit trail below to run performance evaluation
+              </span>
             </div>
-            <div style={{ width: '250px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', position: 'relative' }}>
-              <div style={{ position: 'absolute', width: '40%', height: '100%', background: 'var(--primary-color)', borderRadius: '2px', animation: 'loading-pulse 1.5s infinite ease-in-out' }}></div>
-            </div>
-            <style>{`
-              @keyframes loading-pulse {
-                0% { left: -40%; }
-                50% { left: 100%; }
-                100% { left: 100%; }
-              }
-            `}</style>
           </div>
-        )}
 
-        {!isRunning && !results && (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5rem 2rem', background: 'rgba(255, 255, 255, 0.01)', borderStyle: 'dashed', textAlign: 'center', gap: '1rem' }}>
-            <Activity size={48} style={{ color: 'var(--text-dim)', marginBottom: '0.5rem' }} />
-            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#fff', marginBottom: '0.5rem' }}>No Benchmark Run Yet</h3>
-            <p style={{ color: 'var(--text-muted)', maxWidth: '450px', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '1rem' }}>
-              Run a paired t-test benchmark comparing Apriori and FP-Growth performance on your active dataset. The evaluation uses the <strong>Adaptive Store-Specific Thresholds</strong> automatically optimized for the dataset's market category.
-            </p>
-            <button
-              className="btn btn-primary"
-              onClick={handleRunBenchmark}
-              disabled={isRunning}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.85rem 2rem' }}
-            >
-              <Zap size={18} /> Run Benchmark (N=20)
-            </button>
-          </div>
-        )}
+          <button
+            className="btn btn-secondary"
+            onClick={fetchEvaluationData}
+            style={{ fontSize: '0.82rem', padding: '0.45rem 0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: 'auto', flexShrink: 0 }}
+          >
+            <RefreshCw size={14} className={loadingLogs ? 'spin' : ''} /> Refresh Logs
+          </button>
+        </div>
 
-        {!isRunning && results && (
-          <>
-            {/* Verdict Summary Card */}
-            {renderVerdictCard(results)}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'var(--table-header-bg)', borderBottom: '1px solid var(--border-color)' }}>
+                <th style={{ padding: '0.875rem 1.25rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '48px' }}>#</th>
+                <th style={{ padding: '0.875rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Clock size={13} /> Timestamp</div>
+                </th>
+                <th style={{ padding: '0.875rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><User size={13} /> User</div>
+                </th>
+                <th style={{ padding: '0.875rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
+                <th style={{ padding: '0.875rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Summary</th>
+                <th style={{ padding: '0.875rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Evaluation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingLogs ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: '4rem', textAlign: 'center' }}>
+                    <div className="spin" style={{
+                      width: 28, height: 28, borderRadius: '50%',
+                      border: '2px solid var(--border-color)',
+                      borderTopColor: 'var(--primary-color)',
+                      margin: '0 auto 0.75rem'
+                    }} />
+                    <p style={{ color: 'var(--text-dim)', fontSize: '0.88rem' }}>Loading data uploads history...</p>
+                  </td>
+                </tr>
+              ) : uploadLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <Database size={36} style={{ marginBottom: '0.75rem', color: 'var(--text-dim)' }} />
+                    <p style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.3rem' }}>No data uploads logged yet</p>
+                    <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)' }}>Upload files via Analytics or File History to begin running evaluation benchmarks.</p>
+                  </td>
+                </tr>
+              ) : (
+                uploadLogs.map((item, idx) => {
+                  const isEven = idx % 2 === 0;
+                  const isExpanded = expandedRows.has(item.id);
+                  const isRowRunning = isRunning && String(runningDatasetId) === String(item.dataset_id);
 
-            {/* Top Statistics Cards */}
-            {renderStatsGrid(results)}
+                  return (
+                    <React.Fragment key={item.id}>
+                      <tr
+                        onClick={() => toggleRow(item.id)}
+                        style={{
+                          background: isEven ? 'var(--table-bg)' : 'transparent',
+                          borderBottom: isExpanded ? 'none' : '1px solid var(--border-color)',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--inner-box-bg)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = isEven ? 'var(--table-bg)' : 'transparent'; }}
+                      >
+                        <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            {isExpanded
+                              ? <ChevronDown size={14} style={{ color: 'var(--primary-color)' }} />
+                              : <ChevronRight size={14} />}
+                          </div>
+                        </td>
+                        <td style={{ padding: '0.875rem 1rem', fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {formatDate(item.timestamp)}
+                        </td>
+                        <td style={{ padding: '0.875rem 1rem' }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                            {item.user_name}
+                          </div>
+                          <div style={{ fontSize: '0.76rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                            {item.user_email}
+                          </div>
+                        </td>
+                        <td style={{ padding: '0.875rem 1rem' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.25rem 0.65rem',
+                            borderRadius: '20px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: '#3b82f6',
+                            background: 'rgba(59, 130, 246, 0.12)',
+                            border: '1px solid rgba(59, 130, 246, 0.25)',
+                            whiteSpace: 'nowrap',
+                            fontFamily: 'var(--font-mono)'
+                          }}>
+                            <Upload size={12} />
+                            Data Upload
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.875rem 1rem', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
+                          <div style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.filename}
+                          </div>
+                        </td>
+                        <td style={{ padding: '0.875rem 1rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRunBenchmark(item.dataset_id, item.filename);
+                              }}
+                              disabled={isRunning}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                padding: '0.45rem 1rem',
+                                borderRadius: '8px',
+                                fontSize: '0.78rem',
+                                fontWeight: '700',
+                                background: isRowRunning
+                                  ? 'var(--primary-color)'
+                                  : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                                color: '#ffffff',
+                                border: 'none',
+                                cursor: isRunning ? 'not-allowed' : 'pointer',
+                                boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
+                                whiteSpace: 'nowrap'
+                              }}
+                              title="Run algorithm evaluation benchmark on this dataset"
+                            >
+                              {isRowRunning ? (
+                                <>
+                                  <RefreshCw size={14} className="spin" style={{ color: '#ffffff' }} />
+                                  <span style={{ color: '#ffffff' }}>Running...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Cpu size={14} style={{ color: '#ffffff' }} />
+                                  <span style={{ color: '#ffffff' }}>Run</span>
+                                </>
+                              )}
+                            </button>
 
-            {/* View Toggle Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '0.5rem', gap: '1.5rem' }}>
-              <button
-                onClick={() => setViewMode('friendly')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  borderBottom: viewMode === 'friendly' ? '2px solid var(--primary-color)' : '2px solid transparent',
-                  color: viewMode === 'friendly' ? '#fff' : 'var(--text-muted)',
-                  padding: '0.75rem 0.5rem',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  fontSize: '0.95rem',
-                  transition: 'var(--transition)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <BookOpen size={16} /> User-Friendly Analysis
-              </button>
-              <button
-                onClick={() => setViewMode('technical')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  borderBottom: viewMode === 'technical' ? '2px solid var(--primary-color)' : '2px solid transparent',
-                  color: viewMode === 'technical' ? '#fff' : 'var(--text-muted)',
-                  padding: '0.75rem 0.5rem',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  fontSize: '0.95rem',
-                  transition: 'var(--transition)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <Activity size={16} /> Statistical Details
-              </button>
-            </div>
-
-            {/* Tab Contents */}
-            {viewMode === 'friendly' ? renderFriendlyAnalysis(results) : renderTechnicalAnalysis(results)}
-
-            {/* Charts Panel */}
-            {renderCharts(iterationData)}
-          </>
-        )}
-
-
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportResult(item.dataset_id, item.filename);
+                              }}
+                              disabled={isRowRunning || isRunning || !item.dataset_id || !!exportingStates[item.dataset_id]}
+                              title={isRowRunning ? 'Analysis in progress' : 'Export processed recommendation and association rule results'}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                padding: '0.45rem 0.85rem',
+                                borderRadius: '8px',
+                                fontSize: '0.78rem',
+                                fontWeight: '600',
+                                background: 'transparent',
+                                color: 'var(--text-main)',
+                                border: '1px solid var(--border-color)',
+                                cursor: (isRowRunning || isRunning || !item.dataset_id || !!exportingStates[item.dataset_id]) ? 'not-allowed' : 'pointer',
+                                opacity: (isRowRunning || isRunning || !item.dataset_id || !!exportingStates[item.dataset_id]) ? 0.5 : 1,
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              {exportingStates[item.dataset_id] ? (
+                                <>
+                                  <RefreshCw size={14} className="spin" />
+                                  <span>Downloading...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download size={14} />
+                                  <span>Download</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && item.details && (
+                        <tr style={{ background: isEven ? 'var(--table-bg)' : 'transparent', borderBottom: '1px solid var(--border-color)' }}>
+                          <td colSpan={6} style={{ padding: '0 1.25rem 1rem' }}>
+                            <div style={{
+                              background: 'var(--table-header-bg)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '8px',
+                              padding: '1rem 1.25rem',
+                              marginTop: '0.5rem',
+                              fontSize: '0.8rem',
+                              fontFamily: 'var(--font-mono)',
+                              color: 'var(--text-muted)',
+                              lineHeight: 1.7,
+                              overflowX: 'auto'
+                            }}>
+                              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                                <tbody>
+                                  {Object.entries(item.details)
+                                    .sort(([a], [b]) => a.localeCompare(b))
+                                    .map(([key, value]) => (
+                                      <tr key={key}>
+                                        <td style={{ paddingRight: '1.5rem', color: 'var(--text-dim)', whiteSpace: 'nowrap', verticalAlign: 'top', paddingBottom: '0.15rem' }}>
+                                          {key}
+                                        </td>
+                                        <td style={{ color: 'var(--text-main)', wordBreak: 'break-all' }}>
+                                          {typeof value === 'object' ? JSON.stringify(value) : String(value ?? '—')}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
+      {/* ── BENCHMARK RESULTS SECTION ── */}
+      <div id="benchmark-results-section">
+        {error && (
+          <div className="card" style={{ background: 'rgba(239, 68, 68, 0.05)', borderColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <Info size={20} />
+            <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>{error}</span>
+          </div>
+        )}
 
+        {/* Main Content: Display Area (Full Width) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {isRunning && (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5rem 2rem', background: 'rgba(255, 255, 255, 0.01)', borderStyle: 'dashed', textAlign: 'center', gap: '1.5rem' }}>
+              <RefreshCw size={48} className="spin" style={{ color: 'var(--primary-color)' }} />
+              <div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#fff', marginBottom: '0.5rem' }}>Running Performance Benchmark...</h3>
+                <p style={{ color: 'var(--text-muted)', maxWidth: '500px', fontSize: '0.9rem', lineHeight: '1.6', margin: '0 auto' }}>
+                  Evaluating Apriori and FP-Growth over 20 recursive runs to calculate statistical significance on dataset: <strong>{activeDatasetName || 'Selected Dataset'}</strong>.
+                </p>
+              </div>
+              <div style={{ width: '250px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', position: 'relative' }}>
+                <div style={{ position: 'absolute', width: '40%', height: '100%', background: 'var(--primary-color)', borderRadius: '2px', animation: 'loading-pulse 1.5s infinite ease-in-out' }}></div>
+              </div>
+              <style>{`
+                @keyframes loading-pulse {
+                  0% { left: -40%; }
+                  50% { left: 100%; }
+                  100% { left: 100%; }
+                }
+              `}</style>
+            </div>
+          )}
+
+          {!isRunning && !results && (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem', background: 'rgba(255, 255, 255, 0.01)', borderStyle: 'dashed', textAlign: 'center', gap: '1.25rem' }}>
+              <Activity size={48} style={{ color: 'var(--primary-color)', marginBottom: '0.25rem' }} />
+              <div>
+                <h3 style={{ fontSize: '1.35rem', fontWeight: '800', color: 'var(--text-main)', marginBottom: '0.5rem' }}>
+                  No Benchmark Run Yet
+                </h3>
+                <p style={{ color: 'var(--text-muted)', maxWidth: '540px', fontSize: '0.92rem', lineHeight: '1.6', margin: '0 auto' }}>
+                  To run a performance evaluation benchmark, select an uploaded dataset from the <strong>Data Uploads History</strong> table above and click the <strong>"Run Evaluation"</strong> button.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!isRunning && results && (
+            <>
+              {/* Verdict Summary Card */}
+              {renderVerdictCard(results)}
+
+              {/* Top Statistics Cards */}
+              {renderStatsGrid(results)}
+
+              {/* View Toggle Tabs */}
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '0.5rem', gap: '1.5rem' }}>
+                <button
+                  onClick={() => setViewMode('friendly')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: viewMode === 'friendly' ? '2px solid var(--primary-color)' : '2px solid transparent',
+                    color: viewMode === 'friendly' ? '#fff' : 'var(--text-muted)',
+                    padding: '0.75rem 0.5rem',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.95rem',
+                    transition: 'var(--transition)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <BookOpen size={16} /> User-Friendly Analysis
+                </button>
+                <button
+                  onClick={() => setViewMode('technical')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: viewMode === 'technical' ? '2px solid var(--primary-color)' : '2px solid transparent',
+                    color: viewMode === 'technical' ? '#fff' : 'var(--text-muted)',
+                    padding: '0.75rem 0.5rem',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.95rem',
+                    transition: 'var(--transition)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <Activity size={16} /> Statistical Details
+                </button>
+              </div>
+
+              {/* Tab Contents */}
+              {viewMode === 'friendly' ? renderFriendlyAnalysis(results) : renderTechnicalAnalysis(results)}
+
+              {/* Charts Panel */}
+              {renderCharts(iterationData)}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

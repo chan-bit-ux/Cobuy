@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   ScrollText,
@@ -18,7 +19,8 @@ import {
   Activity,
   Send,
   UserCheck,
-  UserX
+  UserX,
+  Cpu
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000/api';
@@ -107,7 +109,7 @@ function ActionBadge({ action }) {
 }
 
 // ── Detail JSON Viewer ────────────────────────────────────────────────────────
-function DetailPanel({ details }) {
+function DetailPanel({ details, onEvaluate }) {
   if (!details || typeof details !== 'object') return null;
   return (
     <div style={{
@@ -178,7 +180,8 @@ function EmptyState({ filtered }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-const ActivityLog = () => {
+const ActivityLog = ({ embedded = false }) => {
+  const navigate = useNavigate();
   const [logs, setLogs] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -190,6 +193,17 @@ const ActivityLog = () => {
   const [filterStart, setFilterStart] = useState('');
   const [filterEnd, setFilterEnd] = useState('');
   const [filterAction, setFilterAction] = useState('');
+
+  const handleEvaluateDataset = (datasetId, filename) => {
+    if (datasetId) {
+      localStorage.setItem('activeDatasetId', String(datasetId));
+    }
+    if (filename) {
+      localStorage.setItem('activeDatasetName', filename);
+    }
+    sessionStorage.setItem('autoRunBenchmark', 'true');
+    navigate('/evaluation', { state: { autoRun: true, datasetId, filename } });
+  };
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -250,27 +264,50 @@ const ActivityLog = () => {
 
   return (
     <div className="fade-in">
-      {/* Page Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">
-            <ScrollText size={28} style={{ color: 'var(--primary-color)' }} />
-            Activity Audit Log
-          </h1>
-          <p className="page-subtitle">
-            Full audit trail of data operations and configuration changes across your store.
-          </p>
+      {/* Header */}
+      {!embedded ? (
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">
+              <ScrollText size={28} style={{ color: 'var(--primary-color)' }} />
+              Activity Audit Log
+            </h1>
+            <p className="page-subtitle">
+              Full audit trail of data operations and configuration changes across your store.
+            </p>
+          </div>
+          <button
+            className="btn btn-secondary"
+            onClick={fetchLogs}
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+            Refresh
+          </button>
         </div>
-        <button
-          className="btn btn-secondary"
-          onClick={fetchLogs}
-          disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-        >
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          Refresh
-        </button>
-      </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div>
+            <h3 style={{ fontWeight: '700', fontSize: '1.2rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.55rem', margin: 0 }}>
+              <ScrollText size={22} style={{ color: 'var(--primary-color)' }} />
+              Store Activity Audit Log
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0.2rem 0 0' }}>
+              Exclusive admin audit trail of data uploads, purges, invitations, and configuration changes.
+            </p>
+          </div>
+          <button
+            className="btn btn-secondary"
+            onClick={fetchLogs}
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}
+          >
+            <RefreshCw size={14} className={loading ? 'spin' : ''} />
+            Refresh Log
+          </button>
+        </div>
+      )}
 
       {/* Stats Row */}
       <div style={{
@@ -327,7 +364,7 @@ const ActivityLog = () => {
                 className="select"
                 value={filterUser}
                 onChange={(e) => setFilterUser(e.target.value)}
-                style={{ appearance: 'none', paddingRight: '32px' }}
+                style={{ appearance: 'none', paddingRight: '32px', height: '46px' }}
               >
                 <option value="">All users</option>
                 {users.map(u => (
@@ -350,7 +387,7 @@ const ActivityLog = () => {
                 className="select"
                 value={filterAction}
                 onChange={(e) => setFilterAction(e.target.value)}
-                style={{ appearance: 'none', paddingRight: '32px' }}
+                style={{ appearance: 'none', paddingRight: '32px', height: '46px' }}
               >
                 <option value="">All actions</option>
                 <option value="UPLOAD_HISTORICAL_DATA">Data Uploads</option>
@@ -371,6 +408,7 @@ const ActivityLog = () => {
               className="input"
               value={filterStart}
               onChange={(e) => setFilterStart(e.target.value)}
+              style={{ height: '46px' }}
             />
           </div>
 
@@ -383,13 +421,22 @@ const ActivityLog = () => {
               className="input"
               value={filterEnd}
               onChange={(e) => setFilterEnd(e.target.value)}
+              style={{ height: '46px' }}
             />
           </div>
 
           <button
             className="btn btn-secondary"
             onClick={() => { setFilterUser(''); setFilterStart(''); setFilterEnd(''); setFilterAction(''); }}
-            style={{ height: '42px', alignSelf: 'end' }}
+            style={{
+              height: '46px',
+              alignSelf: 'end',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box'
+            }}
           >
             Clear Filters
           </button>
@@ -493,14 +540,16 @@ const ActivityLog = () => {
                           <td style={{ padding: '0.875rem 1rem' }}>
                             <ActionBadge action={log.action} />
                           </td>
-                          <td style={{ padding: '0.875rem 1rem', fontSize: '0.83rem', color: 'var(--text-muted)', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {summary || '—'}
+                          <td style={{ padding: '0.875rem 1rem', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
+                            <div style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {summary || '—'}
+                            </div>
                           </td>
                         </tr>
                         {isExpanded && hasDetails && (
                           <tr style={{ background: isEven ? 'var(--table-bg)' : 'transparent', borderBottom: '1px solid var(--border-color)' }}>
                             <td colSpan={5} style={{ padding: '0 1.25rem 1rem' }}>
-                              <DetailPanel details={log.details} />
+                              <DetailPanel details={log.details} onEvaluate={handleEvaluateDataset} />
                             </td>
                           </tr>
                         )}

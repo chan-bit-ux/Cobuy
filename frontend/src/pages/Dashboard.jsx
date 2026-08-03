@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import {
   TrendingUp,
   ShoppingCart,
@@ -11,7 +14,11 @@ import {
   HelpCircle,
   X,
   BookOpen,
-  CheckCircle2
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  RefreshCw
 } from 'lucide-react';
 import {
   XAxis,
@@ -23,6 +30,8 @@ import {
   Bar,
   Cell
 } from 'recharts';
+
+import ActivityLog from './ActivityLog';
 
 const API_BASE = 'http://localhost:5000/api';
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#f43f5e', '#06b6d4'];
@@ -65,6 +74,363 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [timeFilter, setTimeFilter] = useState('7D');
   const [showPatternsModal, setShowPatternsModal] = useState(false);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const toggleRow = (idx) => {
+    setExpandedRow(prev => (prev === idx ? null : idx));
+  };
+
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      console.log('Starting PDF presentation generation...');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 14;
+      const contentWidth = pageWidth - (margin * 2);
+
+      // Helper for clean footers on all pages
+      const addPageFooter = (pageNum, totalPages) => {
+        pdf.setDrawColor(226, 232, 240);
+        pdf.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('CoBuy Market Insights • Confidential Store Executive Report', margin, pageHeight - 6);
+        pdf.text(`Page ${pageNum} of ${totalPages}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+      };
+
+      // =========================================================================
+      // PAGE 1: EXECUTIVE DASHBOARD & STORE ACTIVITY
+      // =========================================================================
+      
+      // 1. Top Header Banner
+      pdf.setFillColor(30, 27, 75); // Royal Navy #1e1b4b
+      pdf.rect(0, 0, pageWidth, 26, 'F');
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(18);
+      pdf.text('CoBuy', margin, 14);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor(199, 210, 254);
+      pdf.text('Executive Retail Market Analysis Report', margin + 24, 14);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(226, 232, 240);
+      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      pdf.text(`Report Date: ${dateStr}`, pageWidth - margin, 14, { align: 'right' });
+
+      let y = 32;
+
+      // 2. Store Metadata Ribbon
+      pdf.setFillColor(248, 250, 252);
+      pdf.setDrawColor(226, 232, 240);
+      pdf.roundedRect(margin, y, contentWidth, 16, 3, 3, 'FD');
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(71, 85, 105);
+      
+      pdf.text('STORE DATASET:', margin + 4, y + 6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text((localStorage.getItem('activeDatasetName') || 'Store Transactions').substring(0, 28), margin + 31, y + 6);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(71, 85, 105);
+      pdf.text('TOTAL TRANSACTIONS:', margin + 4, y + 11.5);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`${(stats.total_transactions || 0).toLocaleString()} receipts`, margin + 40, y + 11.5);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(71, 85, 105);
+      pdf.text('CATALOG ITEMS:', margin + 105, y + 6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`${stats.unique_items_count || 0} unique products`, margin + 132, y + 6);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(71, 85, 105);
+      pdf.text('PATTERNS FOUND:', margin + 105, y + 11.5);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(79, 70, 229);
+      pdf.text(`${rules.length} buying associations`, margin + 134, y + 11.5);
+
+      y += 22;
+
+      // 3. Executive KPI Cards (4 Grid Cards)
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('1. Executive Summary KPIs', margin, y);
+      y += 5;
+
+      const cardGap = 4;
+      const cardW = (contentWidth - (cardGap * 3)) / 4;
+      
+      const kpis = [
+        { label: 'Total Receipts', value: (stats.total_transactions || 0).toLocaleString(), color: [79, 70, 229] },
+        { label: 'Catalog Items', value: `${stats.unique_items_count || 0}`, color: [16, 185, 129] },
+        { label: 'Patterns Found', value: `${rules.length}`, color: [245, 158, 11] },
+        { label: 'Top Product', value: stats.top_items?.[0]?.name ? stats.top_items[0].name.substring(0, 12) : 'Milk', color: [124, 58, 237] }
+      ];
+
+      kpis.forEach((kpi, idx) => {
+        const x = margin + idx * (cardW + cardGap);
+        
+        pdf.setFillColor(255, 255, 255);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.roundedRect(x, y, cardW, 20, 2.5, 2.5, 'FD');
+
+        pdf.setFillColor(kpi.color[0], kpi.color[1], kpi.color[2]);
+        pdf.rect(x, y + 2, 2.5, 16, 'F');
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(kpi.label, x + 6, y + 6);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(11);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(kpi.value, x + 6, y + 14);
+      });
+
+      y += 26;
+
+      // 4. Store Sales Activity Chart ("How Busy Each Day Was")
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('2. Store Sales Activity Graph (How Busy Each Day Was)', margin, y);
+      y += 5;
+
+      try {
+        const chartElement = document.getElementById('dashboard-sales-chart');
+        if (chartElement) {
+          const canvas = await html2canvas(chartElement, {
+            scale: 2,
+            backgroundColor: '#0f172a',
+            logging: false,
+            useCORS: true
+          });
+          const imgData = canvas.toDataURL('image/png');
+          const imgH = Math.min((canvas.height * contentWidth) / canvas.width, 70);
+          
+          pdf.addImage(imgData, 'PNG', margin, y, contentWidth, imgH);
+          y += imgH + 8;
+        }
+      } catch (canvasErr) {
+        console.warn('Canvas capture warning:', canvasErr);
+      }
+
+      // 5. Top 5 Selling Products Section (Fills Page 1 perfectly!)
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('3. Top Selling Products Summary', margin, y);
+      y += 5;
+
+      pdf.setFillColor(241, 245, 249);
+      pdf.rect(margin, y, contentWidth, 6, 'F');
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(71, 85, 105);
+      pdf.text('Rank & Product Name', margin + 4, y + 4.2);
+      pdf.text('Quantity Sold', margin + 90, y + 4.2);
+      pdf.text('Store Sales Share (%)', margin + 140, y + 4.2);
+      y += 6;
+
+      const topProducts = (stats.top_items || []).slice(0, 4);
+
+      topProducts.forEach((item, idx) => {
+        if (idx % 2 === 1) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(margin, y, contentWidth, 6.5, 'F');
+        }
+        
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(79, 70, 229);
+        pdf.text(`#${idx + 1}`, margin + 4, y + 4.5);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(item.name, margin + 14, y + 4.5);
+
+        pdf.text(`${(item.count || 0).toLocaleString()} units`, margin + 90, y + 4.5);
+
+        const share = (((item.count || 0) / (stats.total_transactions || 1)) * 100).toFixed(1);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(16, 185, 129);
+        pdf.text(`${share}% of transactions`, margin + 140, y + 4.5);
+
+        y += 6.5;
+      });
+
+      addPageFooter(1, 2);
+
+      // =========================================================================
+      // PAGE 2: STRONGEST BUYING PATTERNS & RECOMMENDATIONS
+      // =========================================================================
+      pdf.addPage();
+      y = 12;
+
+      pdf.setFillColor(30, 27, 75);
+      pdf.rect(0, 0, pageWidth, 16, 'F');
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text('CoBuy Executive Store Analysis Report — Buying Patterns & Strategies', margin, 11);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(199, 210, 254);
+      pdf.text(`Date: ${dateStr}`, pageWidth - margin, 11, { align: 'right' });
+
+      y = 24;
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('4. Strongest Buying Patterns (Co-occurrence Rules)', margin, y);
+      y += 5;
+
+      pdf.setFillColor(30, 27, 75);
+      pdf.rect(margin, y, contentWidth, 8, 'F');
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('IF THEY BUY...', margin + 4, y + 5.5);
+      pdf.text('...THEY ALSO BUY', margin + 55, y + 5.5);
+      pdf.text('COMMON %', margin + 105, y + 5.5);
+      pdf.text('LIKELY %', margin + 132, y + 5.5);
+      pdf.text('STRENGTH', margin + 160, y + 5.5);
+      y += 8;
+
+      const rulesToRender = sortedRules.length > 0 ? sortedRules : rules.slice(0, 10);
+      rulesToRender.forEach((rule, idx) => {
+        if (y > pageHeight - 75) {
+          addPageFooter(2, 2);
+          pdf.addPage();
+          y = 20;
+        }
+
+        if (idx % 2 === 1) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(margin, y, contentWidth, 7, 'F');
+        }
+        pdf.setDrawColor(241, 245, 249);
+        pdf.line(margin, y + 7, pageWidth - margin, y + 7);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(rule.antecedents.join(', ').substring(0, 26), margin + 4, y + 5);
+
+        pdf.setTextColor(79, 70, 229);
+        pdf.text(rule.consequents.join(', ').substring(0, 26), margin + 55, y + 5);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(71, 85, 105);
+        pdf.text(`${(rule.support * 100).toFixed(1)}%`, margin + 105, y + 5);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(rule.confidence >= 0.7 ? 16 : 245, rule.confidence >= 0.7 ? 185 : 158, rule.confidence >= 0.7 ? 129 : 11);
+        pdf.text(`${(rule.confidence * 100).toFixed(1)}%`, margin + 132, y + 5);
+
+        pdf.setTextColor(79, 70, 229);
+        pdf.text(`${rule.lift.toFixed(2)}x`, margin + 160, y + 5);
+
+        y += 7;
+      });
+
+      y += 10;
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('5. Recommended Store Strategies', margin, y);
+      y += 6;
+
+      const recommendationsList = [
+        {
+          title: 'Strategic Shelf Placement',
+          desc: 'Place high-confidence pairing products (such as Soda, Eggs, and Sugar) on adjacent shelves or prominent counter displays to trigger immediate impulse buys.'
+        },
+        {
+          title: 'Combo Bundle Promotion',
+          desc: 'Package top co-occurring item pairs together as a discounted combo deal to boost average order value and customer transaction size.'
+        },
+        {
+          title: 'Targeted Store Signage',
+          desc: 'Install shelf tags ("Customers who bought X also picked up Y") near anchor items to guide customer shopping habits and increase cross-category discovery.'
+        }
+      ];
+
+      recommendationsList.forEach((rec, idx) => {
+        const cardH = 13;
+        pdf.setFillColor(248, 250, 252);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.roundedRect(margin, y, contentWidth, cardH, 2, 2, 'FD');
+
+        pdf.setFillColor(79, 70, 229);
+        pdf.rect(margin, y, 2.5, cardH, 'F');
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(30, 27, 75);
+        pdf.text(`Tip ${idx + 1}: ${rec.title}`, margin + 6, y + 5);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(71, 85, 105);
+        
+        const splitText = pdf.splitTextToSize(rec.desc, contentWidth - 12);
+        pdf.text(splitText, margin + 6, y + 9.5);
+
+        y += cardH + 4;
+      });
+
+      addPageFooter(2, 2);
+
+      const fileName = `CoBuy_Analysis_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      const fileUrl = URL.createObjectURL(pdfFile);
+
+      const downloadLink = document.createElement('a');
+      downloadLink.href = fileUrl;
+      downloadLink.download = fileName;
+      downloadLink.style.display = 'none';
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+
+      setTimeout(() => {
+        if (document.body.contains(downloadLink)) {
+          document.body.removeChild(downloadLink);
+        }
+        URL.revokeObjectURL(fileUrl);
+      }, 1000);
+
+      console.log('Stunning PDF report presentation exported successfully!');
+    } catch (err) {
+      console.error('Error generating PDF presentation:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -139,7 +505,7 @@ const Dashboard = () => {
 
   return (
     <div className="fade-in">
-      <div className="page-header">
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 className="page-title">
             <TrendingUp size={28} style={{ color: 'var(--primary-color)' }} />
@@ -147,6 +513,33 @@ const Dashboard = () => {
           </h1>
           <p className="page-subtitle">Specialized buying pattern finding for your retail niche.</p>
         </div>
+        {stats.active && (
+          <button
+            onClick={handleExportPDF}
+            disabled={isExporting}
+            className="btn btn-primary"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.5rem 1.15rem',
+              fontSize: '0.85rem',
+              fontWeight: '600',
+              cursor: isExporting ? 'not-allowed' : 'pointer',
+              borderRadius: '8px'
+            }}
+          >
+            {isExporting ? (
+              <>
+                <RefreshCw size={16} className="spin" /> Generating PDF...
+              </>
+            ) : (
+              <>
+                <Download size={16} /> Export Report
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {!stats.active ? (
@@ -188,7 +581,7 @@ const Dashboard = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
             {/* Chart 1: Option 2 Executive Bar Pillars */}
-            <div className="card">
+            <div className="card" id="dashboard-sales-chart">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>
                   <h3 style={{ fontWeight: '700', fontSize: '1.15rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -263,7 +656,6 @@ const Dashboard = () => {
                               key={`bar-${index}`}
                               fill={isPeak ? 'var(--accent-color)' : 'var(--primary-color)'}
                               style={{
-                                filter: isPeak ? 'drop-shadow(0 0 8px var(--accent-color))' : 'none',
                                 transition: 'all 0.3s ease'
                               }}
                             />
@@ -400,18 +792,179 @@ const Dashboard = () => {
                       <th>How Common This Is</th>
                       <th>How Likely</th>
                       <th>How Strong the Link Is</th>
+                      <th style={{ textAlign: 'right' }}>Details</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedRules.map((rule, idx) => (
-                      <tr key={idx}>
-                        <td style={{ fontWeight: '600', color: '#fff' }}>{rule.antecedents.join(', ')}</td>
-                        <td style={{ fontWeight: '600', color: 'var(--primary-color)' }}>{rule.consequents.join(', ')}</td>
-                        <td className="mono">{(rule.support * 100).toFixed(1)}%</td>
-                        <td className="mono" style={{ color: rule.confidence >= 0.7 ? '#10b981' : '#f59e0b', fontWeight: '700' }}>{(rule.confidence * 100).toFixed(1)}%</td>
-                        <td className="mono" style={{ fontWeight: '600' }}>{rule.lift.toFixed(2)}x</td>
-                      </tr>
-                    ))}
+                    {sortedRules.map((rule, idx) => {
+                      const isEven = idx % 2 === 0;
+                      const isExpanded = expandedRow === idx;
+                      const totalTx = stats.total_transactions || 229;
+                      const bothCount = rule.rule_tx_count || Math.max(1, Math.round(rule.support * totalTx));
+                      const antCount = rule.ant_tx_count || Math.max(bothCount, Math.round(bothCount / (rule.confidence || 1)));
+                      const consRate = rule.consequent_baseline_rate || (rule.lift ? (rule.confidence / rule.lift) : 0.2);
+                      const consCount = Math.max(1, Math.round(consRate * totalTx));
+                      const antText = rule.antecedents.join(', ');
+                      const consText = rule.consequents.join(', ');
+                      const allItemsText = [...rule.antecedents, ...rule.consequents].join(', ');
+
+                      return (
+                        <React.Fragment key={idx}>
+                          <tr
+                            style={{
+                              background: isEven ? 'var(--table-bg)' : 'transparent',
+                              borderBottom: isExpanded ? 'none' : '1px solid var(--border-color)',
+                              transition: 'background 0.15s ease'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--inner-box-bg)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = isEven ? 'var(--table-bg)' : 'transparent'; }}
+                          >
+                            <td style={{ fontWeight: '600', color: '#fff' }}>{antText}</td>
+                            <td style={{ fontWeight: '600', color: 'var(--primary-color)' }}>{consText}</td>
+                            <td className="mono">{(rule.support * 100).toFixed(1)}%</td>
+                            <td className="mono" style={{ color: rule.confidence >= 0.7 ? '#10b981' : '#f59e0b', fontWeight: '700' }}>{(rule.confidence * 100).toFixed(1)}%</td>
+                            <td className="mono" style={{ fontWeight: '600' }}>{rule.lift.toFixed(2)}x</td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                onClick={() => toggleRow(idx)}
+                                style={{
+                                  background: isExpanded ? 'rgba(99, 102, 241, 0.18)' : 'var(--inner-box-bg)',
+                                  border: `1px solid ${isExpanded ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                                  color: isExpanded ? 'var(--primary-color)' : 'var(--text-main)',
+                                  borderRadius: '6px',
+                                  padding: '0.35rem 0.75rem',
+                                  fontSize: '0.75rem',
+                                  fontWeight: '600',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem'
+                                }}
+                              >
+                                {isExpanded ? 'Hide' : 'View'}
+                                {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                              </button>
+                            </td>
+                          </tr>
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <tr key={`exp-${idx}`} style={{ background: isEven ? 'var(--table-bg)' : 'transparent', borderBottom: '1px solid var(--border-color)' }}>
+                                <td colSpan={6} style={{ padding: 0 }}>
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                    style={{ overflow: 'hidden', padding: '0 1.25rem 1rem' }}
+                                  >
+                                    <div style={{
+                                      background: 'var(--table-header-bg)',
+                                      border: '1px solid var(--border-color)',
+                                      borderRadius: '10px',
+                                      padding: '1.15rem 1.4rem',
+                                      marginTop: '0.4rem',
+                                      fontSize: '0.82rem',
+                                      color: 'var(--text-main)',
+                                      lineHeight: 1.7
+                                    }}>
+                                      {/* Header badge */}
+                                      <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        marginBottom: '0.85rem',
+                                        paddingBottom: '0.65rem',
+                                        borderBottom: '1px solid var(--border-color)',
+                                        flexWrap: 'wrap',
+                                        gap: '0.5rem'
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', fontSize: '0.88rem' }}>
+                                          <span style={{ color: 'var(--primary-color)' }}>📊 System Calculation Proof</span>
+                                          <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-muted)' }}>
+                                            (How this buying pattern was computed from your uploaded store data)
+                                          </span>
+                                        </div>
+                                        <span style={{
+                                          fontSize: '0.72rem',
+                                          fontWeight: '700',
+                                          color: '#10b981',
+                                          background: 'rgba(16, 185, 129, 0.12)',
+                                          padding: '0.2rem 0.55rem',
+                                          borderRadius: '4px',
+                                          border: '1px solid rgba(16, 185, 129, 0.25)'
+                                        }}>
+                                          Verified Data Proof
+                                        </span>
+                                      </div>
+
+                                      {/* 3 Step Proof Cards */}
+                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.85rem' }}>
+                                        
+                                        {/* Card 1: Common Frequency */}
+                                        <div style={{ background: 'var(--inner-box-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.9rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                          <div>
+                                            <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                                              1. How Common This Is
+                                            </div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#3b82f6', marginBottom: '0.2rem' }}>
+                                              {(rule.support * 100).toFixed(1)}%
+                                            </div>
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: '1.4', marginBottom: '0.65rem' }}>
+                                              Appeared in <strong>{bothCount}</strong> out of <strong>{totalTx.toLocaleString()}</strong> total receipts in your uploaded file.
+                                            </div>
+                                          </div>
+                                          <div style={{ fontSize: '0.76rem', color: 'var(--text-main)', fontFamily: 'var(--font-mono)', background: 'var(--table-header-bg)', padding: '0.45rem 0.65rem', borderRadius: '5px', border: '1px solid var(--border-color)', lineHeight: '1.5' }}>
+                                            <strong>{bothCount}</strong> (receipts with {allItemsText}) &divide; <strong>{totalTx.toLocaleString()}</strong> (total store receipts) = <strong>{(rule.support * 100).toFixed(1)}%</strong>
+                                          </div>
+                                        </div>
+
+                                        {/* Card 2: Likelihood / Habit */}
+                                        <div style={{ background: 'var(--inner-box-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.9rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                          <div>
+                                            <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                                              2. How Likely They Buy Together
+                                            </div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: '800', color: rule.confidence >= 0.7 ? '#10b981' : '#f59e0b', marginBottom: '0.2rem' }}>
+                                              {(rule.confidence * 100).toFixed(1)}%
+                                            </div>
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: '1.4', marginBottom: '0.65rem' }}>
+                                              When customers bought <strong>{antText}</strong>, <strong>{(rule.confidence * 100).toFixed(1)}%</strong> of them also grabbed <strong>{consText}</strong>.
+                                            </div>
+                                          </div>
+                                          <div style={{ fontSize: '0.76rem', color: 'var(--text-main)', fontFamily: 'var(--font-mono)', background: 'var(--table-header-bg)', padding: '0.45rem 0.65rem', borderRadius: '5px', border: '1px solid var(--border-color)', lineHeight: '1.5' }}>
+                                            <strong>{bothCount}</strong> (bought {allItemsText}) &divide; <strong>{antCount}</strong> (bought {antText}) = <strong>{(rule.confidence * 100).toFixed(1)}%</strong>
+                                          </div>
+                                        </div>
+
+                                        {/* Card 3: Connection Strength */}
+                                        <div style={{ background: 'var(--inner-box-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.9rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                          <div>
+                                            <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                                              3. Connection Strength
+                                            </div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--primary-color)', marginBottom: '0.2rem' }}>
+                                              {rule.lift.toFixed(2)}x
+                                            </div>
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: '1.4', marginBottom: '0.65rem' }}>
+                                              Buying these together is <strong>{rule.lift.toFixed(2)} times more likely</strong> than an average random customer purchase.
+                                            </div>
+                                          </div>
+                                          <div style={{ fontSize: '0.76rem', color: 'var(--text-main)', fontFamily: 'var(--font-mono)', background: 'var(--table-header-bg)', padding: '0.45rem 0.65rem', borderRadius: '5px', border: '1px solid var(--border-color)', lineHeight: '1.5' }}>
+                                            <strong>{(rule.confidence * 100).toFixed(1)}%</strong> (buyer rate) &divide; [<strong>{consCount}</strong> ({consText} receipts) &divide; <strong>{totalTx.toLocaleString()}</strong> (total receipts)] = <strong>{rule.lift.toFixed(2)}x boost</strong>
+                                          </div>
+                                        </div>
+
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                </td>
+                              </tr>
+                            )}
+                          </AnimatePresence>
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

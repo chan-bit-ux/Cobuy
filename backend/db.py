@@ -495,6 +495,8 @@ def get_activity_logs(store_id, user_email_filter=None, start_date=None, end_dat
         FROM activity_logs al
         LEFT JOIN users u ON al.user_email = u.email
         WHERE al.store_id = ? AND al.is_deleted = 0
+          AND (u.role IS NULL OR u.role != 'shop_admin')
+          AND (u.account_type IS NULL OR u.account_type != 'admin')
     '''
     params = [store_id]
     if user_email_filter:
@@ -518,7 +520,9 @@ def get_store_users_for_filter(store_id):
         '''SELECT DISTINCT al.user_email, u.name
            FROM activity_logs al
            LEFT JOIN users u ON al.user_email = u.email
-           WHERE al.store_id = ? AND al.is_deleted = 0''',
+           WHERE al.store_id = ? AND al.is_deleted = 0
+             AND (u.role IS NULL OR u.role != 'shop_admin')
+             AND (u.account_type IS NULL OR u.account_type != 'admin')''',
         (store_id,)
     ).fetchall()
     conn.close()
@@ -530,12 +534,12 @@ def get_transactions(user_email=None, dataset_id=None):
     conn = get_db_connection()
     query = 'SELECT t.id, ti.item FROM transactions t JOIN transaction_items ti ON t.id = ti.transaction_id'
     conditions, params = [], []
-    if user_email:
-        conditions.append("(t.user_email = ? OR t.user_email IS NULL)")
-        params.append(user_email)
     if dataset_id:
         conditions.append("t.dataset_id = ?")
         params.append(dataset_id)
+    elif user_email:
+        conditions.append("(t.user_email = ? OR t.user_email IS NULL)")
+        params.append(user_email)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY t.id"
@@ -555,12 +559,12 @@ def get_transaction_basket_values(user_email=None, dataset_id=None):
     conn = get_db_connection()
     query = 'SELECT t.id, t.basket_value FROM transactions t'
     conditions, params = [], []
-    if user_email:
-        conditions.append("(t.user_email = ? OR t.user_email IS NULL)")
-        params.append(user_email)
     if dataset_id:
         conditions.append("t.dataset_id = ?")
         params.append(dataset_id)
+    elif user_email:
+        conditions.append("(t.user_email = ? OR t.user_email IS NULL)")
+        params.append(user_email)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY t.id"
@@ -574,12 +578,12 @@ def get_transactions_with_dates(user_email=None, dataset_id=None):
     conn = get_db_connection()
     query = 'SELECT t.id, t.created_at, ti.item FROM transactions t JOIN transaction_items ti ON t.id = ti.transaction_id'
     conditions, params = [], []
-    if user_email:
-        conditions.append("(t.user_email = ? OR t.user_email IS NULL)")
-        params.append(user_email)
     if dataset_id:
         conditions.append("t.dataset_id = ?")
         params.append(dataset_id)
+    elif user_email:
+        conditions.append("(t.user_email = ? OR t.user_email IS NULL)")
+        params.append(user_email)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY t.id"
@@ -594,6 +598,8 @@ def get_transactions_with_dates(user_email=None, dataset_id=None):
             transactions_map[tx_id] = {'date': row['created_at'], 'items': []}
         transactions_map[tx_id]['items'].append(row['item'])
     return [transactions_map[k] for k in sorted(transactions_map.keys())]
+
+
 
 def clear_transactions(user_email=None, dataset_id=None):
     conn = get_db_connection()

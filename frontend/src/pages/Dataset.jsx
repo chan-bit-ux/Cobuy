@@ -6,7 +6,9 @@ import {
   Trash2, 
   History as HistoryIcon,
   Database,
-  Play
+  Play,
+  Download,
+  Loader2
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000/api';
@@ -14,13 +16,25 @@ const API_BASE = 'http://localhost:5000/api';
 const Dataset = () => {
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exportingStates, setExportingStates] = useState({});
   const navigate = useNavigate();
 
   const fetchDatasets = async () => {
     try {
       setLoading(true);
       const response = await axios.get(`${API_BASE}/datasets`);
-      setDatasets(response.data.datasets || []);
+      const fetched = response.data.datasets || [];
+      setDatasets(fetched);
+      if (fetched.length === 0) {
+        localStorage.removeItem('activeDatasetId');
+        localStorage.removeItem('activeDatasetName');
+      } else {
+        const activeId = localStorage.getItem('activeDatasetId');
+        if (activeId && !fetched.some(ds => String(ds.id) === String(activeId))) {
+          localStorage.removeItem('activeDatasetId');
+          localStorage.removeItem('activeDatasetName');
+        }
+      }
     } catch (err) {
       console.error("Error fetching datasets:", err);
     } finally {
@@ -35,7 +49,13 @@ const Dataset = () => {
   const handleDeleteDataset = async (datasetId) => {
     try {
       await axios.delete(`${API_BASE}/datasets/${datasetId}`);
-      setDatasets(datasets.filter(ds => ds.id !== datasetId));
+      const updated = datasets.filter(ds => ds.id !== datasetId);
+      setDatasets(updated);
+      const activeId = localStorage.getItem('activeDatasetId');
+      if (String(activeId) === String(datasetId) || updated.length === 0) {
+        localStorage.removeItem('activeDatasetId');
+        localStorage.removeItem('activeDatasetName');
+      }
     } catch (err) {
       console.error("Error deleting dataset:", err);
     }
@@ -52,6 +72,38 @@ const Dataset = () => {
       localStorage.setItem('activeDatasetId', ds.id);
       localStorage.setItem('activeDatasetName', ds.name);
       navigate(`/analytics?dataset_id=${ds.id}`);
+    }
+  };
+
+  const handleExportResult = async (uploadId, filename) => {
+    try {
+      setExportingStates(prev => ({ ...prev, [uploadId]: true }));
+      const token = localStorage.getItem('token') || '';
+      const userEmail = localStorage.getItem('userEmail') || '';
+      
+      const response = await axios.get(`${API_BASE}/admin/uploads/${uploadId}/export`, {
+        responseType: 'blob',
+        headers: {
+          'Authorization': token ? (token.startsWith('Bearer ') ? token : `Bearer ${token}`) : '',
+          'X-User-Email': userEmail
+        }
+      });
+
+      const blob = new Blob([response.data], { type: response.headers['content-type'] || 'text/csv' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const cleanName = filename ? filename.replace(/\.[^/.]+$/, "") : `upload_${uploadId}`;
+      link.setAttribute('download', `recommendation_results_${cleanName}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Failed to download export result:', error);
+      alert('Failed to download export result. Please ensure administrator access.');
+    } finally {
+      setExportingStates(prev => ({ ...prev, [uploadId]: false }));
     }
   };
 
@@ -107,72 +159,109 @@ const Dataset = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead style={{ position: 'sticky', top: 0, background: 'var(--table-header-bg)', zIndex: 10, borderBottom: '1px solid var(--border-color)' }}>
                 <tr>
-                  <th style={{ textAlign: 'left', padding: '1rem 1.5rem', width: '55%' }}>File Name</th>
-                  <th style={{ textAlign: 'left', padding: '1rem 1.5rem', width: '30%' }}>Date Uploaded</th>
-                  <th style={{ textAlign: 'center', padding: '1rem 1.5rem', width: '15%' }}>Delete</th>
+                  <th style={{ textAlign: 'left', padding: '1rem 1.5rem', width: '45%' }}>File Name</th>
+                  <th style={{ textAlign: 'left', padding: '1rem 1.5rem', width: '25%' }}>Date Uploaded</th>
+                  <th style={{ textAlign: 'center', padding: '1rem 1.5rem', width: '20%' }}>Actions</th>
+                  <th style={{ textAlign: 'center', padding: '1rem 1.5rem', width: '10%' }}>Delete</th>
                 </tr>
               </thead>
               <tbody>
-                {datasets.map((ds) => (
-                  <tr key={ds.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ textAlign: 'left', padding: '0.9rem 1.5rem' }}>
-                      <div 
-                        onClick={() => handleSelectFile(ds)}
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '0.75rem',
-                          cursor: 'pointer',
-                          padding: '0.35rem 0.5rem',
-                          borderRadius: '8px',
-                          transition: 'all 0.2s ease',
-                          width: 'fit-content'
-                        }}
-                        className="history-file-link"
-                        title="Click to look back on this file and rerun analytics"
-                      >
-                        <FileText size={18} style={{ color: 'var(--primary-color)', flexShrink: 0 }} />
-                        <span style={{ fontWeight: '700', color: 'var(--text-main)', textDecoration: 'underline', textUnderlineOffset: '4px' }}>
-                          {ds.name}
-                        </span>
-                        <span style={{ 
-                          fontSize: '0.75rem', 
-                          color: 'var(--primary-color)', 
-                          background: 'rgba(99, 102, 241, 0.15)',
-                          padding: '0.2rem 0.6rem',
-                          borderRadius: '100px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.3rem',
-                          fontWeight: '600',
-                          marginLeft: '0.5rem'
-                        }}>
-                          <Play size={10} fill="currentColor" /> Rerun Analytics
-                        </span>
-                      </div>
-                    </td>
-                    <td className="mono" style={{ textAlign: 'left', padding: '0.9rem 1.5rem', fontSize: '0.85rem' }}>
-                      {ds.upload_date}
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '0.9rem 1.5rem' }}>
-                      <button
-                        onClick={() => handleDeleteDataset(ds.id)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-muted)',
-                          cursor: 'pointer',
-                          padding: '0.4rem',
-                          borderRadius: '6px',
-                          transition: 'color 0.2s'
-                        }}
-                        title="Delete from History"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {datasets.map((ds) => {
+                  const isProcessing = ds.status === 'processing' || ds.status === 'running';
+                  const isExporting = !!exportingStates[ds.id];
+                  return (
+                    <tr key={ds.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ textAlign: 'left', padding: '0.9rem 1.5rem' }}>
+                        <div 
+                          onClick={() => handleSelectFile(ds)}
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.75rem',
+                            cursor: 'pointer',
+                            padding: '0.35rem 0.5rem',
+                            borderRadius: '8px',
+                            transition: 'all 0.2s ease',
+                            width: 'fit-content'
+                          }}
+                          className="history-file-link"
+                          title="Click to look back on this file and rerun analytics"
+                        >
+                          <FileText size={18} style={{ color: 'var(--primary-color)', flexShrink: 0 }} />
+                          <span style={{ fontWeight: '700', color: 'var(--text-main)', textDecoration: 'underline', textUnderlineOffset: '4px' }}>
+                            {ds.name}
+                          </span>
+                          <span style={{ 
+                            fontSize: '0.75rem', 
+                            color: 'var(--primary-color)', 
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '100px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            fontWeight: '600',
+                            marginLeft: '0.5rem'
+                          }}>
+                            <Play size={10} fill="currentColor" /> Rerun Analytics
+                          </span>
+                        </div>
+                      </td>
+                      <td className="mono" style={{ textAlign: 'left', padding: '0.9rem 1.5rem', fontSize: '0.85rem' }}>
+                        {ds.upload_date}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.9rem 1.5rem' }}>
+                        <button
+                          onClick={() => handleExportResult(ds.id, ds.name)}
+                          disabled={isProcessing || isExporting}
+                          title={isProcessing ? 'Analysis in progress' : 'Export recommendation results as CSV'}
+                          className="btn btn-secondary"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.45rem',
+                            fontSize: '0.8rem',
+                            padding: '0.45rem 0.85rem',
+                            borderRadius: '6px',
+                            cursor: (isProcessing || isExporting) ? 'not-allowed' : 'pointer',
+                            opacity: (isProcessing || isExporting) ? 0.6 : 1,
+                            fontWeight: '600',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {isExporting ? (
+                            <>
+                              <Loader2 size={14} className="spin" />
+                              <span>Downloading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download size={14} />
+                              <span>Download</span>
+                            </>
+                          )}
+                        </button>
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.9rem 1.5rem' }}>
+                        <button
+                          onClick={() => handleDeleteDataset(ds.id)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            padding: '0.4rem',
+                            borderRadius: '6px',
+                            transition: 'color 0.2s'
+                          }}
+                          title="Delete from History"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -183,3 +272,4 @@ const Dataset = () => {
 };
 
 export default Dataset;
+

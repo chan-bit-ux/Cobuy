@@ -135,7 +135,7 @@ export const JoinPage = ({ token, onLogin, onGoToLogin }) => {
 
   React.useEffect(() => {
     if (token) handleAccept();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -274,8 +274,8 @@ const Login = ({ onLogin }) => {
       alignItems: 'center',
       position: 'relative',
       overflow: 'hidden',
-      backgroundColor: '#050505',
-      backgroundImage: 'radial-gradient(ellipse at 50% -20%, rgba(245, 245, 245, 0.015) 0%, transparent 60%)'
+      backgroundColor: 'var(--bg-color)',
+      backgroundImage: 'var(--bg-gradient)'
     }}>
       {/* Autofill and Scrollbar CSS Overrides Tag */}
       <style>{`
@@ -283,19 +283,69 @@ const Login = ({ onLogin }) => {
         input:-webkit-autofill:hover,
         input:-webkit-autofill:focus,
         input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 30px #141414 inset !important;
+          -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
           -webkit-text-fill-color: var(--text-main) !important;
           transition: background-color 5000s ease-in-out 0s;
         }
+        [data-theme="light"] input:-webkit-autofill,
+        [data-theme="light"] input:-webkit-autofill:hover,
+        [data-theme="light"] input:-webkit-autofill:focus,
+        [data-theme="light"] input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 1000px #f1f5f9 inset !important;
+          -webkit-text-fill-color: #0f172a !important;
+        }
+        [data-theme="dark"] input:-webkit-autofill,
+        [data-theme="dark"] input:-webkit-autofill:hover,
+        [data-theme="dark"] input:-webkit-autofill:focus,
+        [data-theme="dark"] input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+          -webkit-text-fill-color: #f8fafc !important;
+        }
         .login-scroll-container::-webkit-scrollbar { width: 5px; }
         .login-scroll-container::-webkit-scrollbar-track { background: transparent; }
-        .login-scroll-container::-webkit-scrollbar-thumb { background: rgba(245,245,245,0.08); border-radius: 10px; }
-        .login-scroll-container::-webkit-scrollbar-thumb:hover { background: rgba(245,245,245,0.15); }
-        .account-type-card { cursor: pointer; border-radius: 10px; padding: 0.875rem 1rem; border: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.02); transition: all 0.2s ease; display: flex; align-items: flex-start; gap: 0.75rem; }
-        .account-type-card:hover { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.04); }
-        .account-type-card.selected { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.08); }
-        .login-card .input, .login-card .select { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.1); }
-        .login-card .input:focus, .login-card .select:focus { background: rgba(255,255,255,0.09) !important; border-color: rgba(59,130,246,0.7); }
+        .login-scroll-container::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2); border-radius: 10px; }
+        .login-scroll-container::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.35); }
+        .account-type-card { cursor: pointer; border-radius: 10px; padding: 0.875rem 1rem; border: 1px solid var(--border-color); background: var(--inner-box-bg); transition: all 0.2s ease; display: flex; align-items: flex-start; gap: 0.75rem; }
+        .account-type-card:hover { border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.06); }
+        .account-type-card.selected { border-color: rgba(59,130,246,0.6); background: rgba(59,130,246,0.1); }
+        
+        .login-card .input, .login-card .select {
+          background: var(--inner-box-bg);
+          border: 1px solid var(--border-color);
+          color: var(--text-main) !important;
+        }
+        .login-card .input::placeholder {
+          color: var(--text-dim) !important;
+          opacity: 0.7;
+        }
+        .login-card .input:focus, .login-card .select:focus {
+          background: var(--card-bg) !important;
+          border-color: var(--primary-color) !important;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        [data-theme="light"] .login-card .input,
+        [data-theme="light"] .login-card .select {
+          background: #f8fafc !important;
+          border-color: #cbd5e1 !important;
+          color: #0f172a !important;
+        }
+        [data-theme="light"] .login-card .input:focus,
+        [data-theme="light"] .login-card .select:focus {
+          background: #ffffff !important;
+          border-color: #3b82f6 !important;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        [data-theme="dark"] .login-card .input,
+        [data-theme="dark"] .login-card .select {
+          background: rgba(15, 23, 42, 0.6) !important;
+          border-color: rgba(255, 255, 255, 0.12) !important;
+          color: #f8fafc !important;
+        }
+        [data-theme="dark"] .login-card .input:focus,
+        [data-theme="dark"] .login-card .select:focus {
+          background: rgba(15, 23, 42, 0.9) !important;
+          border-color: rgba(59, 130, 246, 0.7) !important;
+        }
       `}</style>
 
       <motion.div
@@ -309,7 +359,7 @@ const Login = ({ onLogin }) => {
           padding: '2.5rem',
           zIndex: 10,
           margin: '1.5rem',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7), inset 1px 1px 0px 0px rgba(245, 245, 245, 0.05)'
+          boxShadow: 'var(--card-shadow, 0 20px 40px rgba(0, 0, 0, 0.3))'
         }}
       >
         {/* Brand Header */}
@@ -320,8 +370,8 @@ const Login = ({ onLogin }) => {
         {/* Tab Selector */}
         <div style={{
           display: 'flex',
-          background: 'rgba(245, 245, 245, 0.02)',
-          border: '1px solid rgba(245, 245, 245, 0.05)',
+          background: 'var(--inner-box-bg)',
+          border: '1px solid var(--border-color)',
           borderRadius: '8px',
           padding: '4px',
           marginBottom: '2rem',
@@ -358,8 +408,8 @@ const Login = ({ onLogin }) => {
               left: isRegister ? '50%' : '4px',
               right: isRegister ? '4px' : '50%',
               bottom: '4px',
-              backgroundColor: 'rgba(245, 245, 245, 0.08)',
-              border: '1px solid rgba(245, 245, 245, 0.05)',
+              backgroundColor: 'var(--badge-bg)',
+              border: '1px solid var(--border-color)',
               borderRadius: '6px', zIndex: 1
             }}
           />
@@ -406,7 +456,11 @@ const Login = ({ onLogin }) => {
         </AnimatePresence>
 
         {/* Form Inputs */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <form onSubmit={handleSubmit} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Dummy inputs to prevent browser autofill */}
+          <input type="text" name="prevent_autofill_email" style={{ display: 'none' }} tabIndex={-1} readOnly />
+          <input type="password" name="prevent_autofill_password" style={{ display: 'none' }} tabIndex={-1} readOnly />
+
           <div
             className="login-scroll-container"
             style={{
@@ -437,6 +491,7 @@ const Login = ({ onLogin }) => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
+                    autoComplete="off"
                     className="input"
                   />
                 </motion.div>
@@ -451,6 +506,7 @@ const Login = ({ onLogin }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="off"
                 className="input"
               />
             </div>
@@ -464,6 +520,7 @@ const Login = ({ onLogin }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
                   className="input"
                   style={{ paddingRight: '44px' }}
                 />
@@ -501,9 +558,9 @@ const Login = ({ onLogin }) => {
                     >
                       <div style={{
                         width: 36, height: 36, borderRadius: '8px', flexShrink: 0,
-                        background: accountType === 'admin' ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
+                        background: accountType === 'admin' ? 'rgba(59,130,246,0.15)' : 'var(--inner-box-bg)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: '1px solid ' + (accountType === 'admin' ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'),
+                        border: '1px solid ' + (accountType === 'admin' ? 'rgba(59,130,246,0.3)' : 'var(--border-color)'),
                         transition: 'all 0.2s ease'
                       }}>
                         <Store size={16} style={{ color: accountType === 'admin' ? 'var(--primary-color)' : 'var(--text-dim)' }} />
@@ -519,9 +576,9 @@ const Login = ({ onLogin }) => {
                     >
                       <div style={{
                         width: 36, height: 36, borderRadius: '8px', flexShrink: 0,
-                        background: accountType === 'member' ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)',
+                        background: accountType === 'member' ? 'rgba(16,185,129,0.12)' : 'var(--inner-box-bg)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: '1px solid ' + (accountType === 'member' ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.06)'),
+                        border: '1px solid ' + (accountType === 'member' ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'),
                         transition: 'all 0.2s ease'
                       }}>
                         <Users size={16} style={{ color: accountType === 'member' ? '#10b981' : 'var(--text-dim)' }} />

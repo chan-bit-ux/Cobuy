@@ -412,8 +412,23 @@ const Analytics = () => {
       const url = targetId ? `${API_BASE}/stats?dataset_id=${targetId}` : `${API_BASE}/stats`;
       const response = await axios.get(url);
       setStats(response.data);
+
+      if (targetId) {
+        try {
+          const historyRes = await axios.get(`${API_BASE}/datasets`);
+          const datasets = historyRes.data.datasets || [];
+          if (datasets.length === 0 || !datasets.some(ds => String(ds.id) === String(targetId))) {
+            localStorage.removeItem('activeDatasetId');
+            localStorage.removeItem('activeDatasetName');
+          }
+        } catch (e) {
+          // ignore background dataset check failure
+        }
+      }
     } catch (err) {
       console.error('Error fetching stats:', err);
+      localStorage.removeItem('activeDatasetId');
+      localStorage.removeItem('activeDatasetName');
     }
   };
 
@@ -686,6 +701,8 @@ const Analytics = () => {
   const groupedSets = getGroupedItemsets();
 
 
+  const hasActiveSource = (file && uploadStatus === 'success') || (datasetId && activeDatasetName && stats.active);
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -697,7 +714,7 @@ const Analytics = () => {
           <p className="page-subtitle">Configure parameters, view product frequencies, and generate buying patterns.</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          {stats.active && (
+          {hasActiveSource && (
             (miningStatus === 'success' || !!results) ? (
               <button
                 className="btn btn-danger btn-action"
@@ -794,7 +811,7 @@ const Analytics = () => {
 
 
               <div style={{ minHeight: '20px', marginBottom: '0.5rem' }}>
-                {(uploadStatus === 'success' || stats.active) && (
+                {hasActiveSource && (
                   <div style={{ color: '#10b981', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: '600' }}>
                     <CheckCircle size={14} /> Ready to mine ({stats.total_transactions} transactions loaded)
                   </div>
@@ -837,13 +854,13 @@ const Analytics = () => {
             </div>
 
 
-            {!stats.active && (
+            {!hasActiveSource && (
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500', marginBottom: '0.6rem' }}>
                   Please input first...
                 </div>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', margin: '0 0 1rem 0', fontWeight: '500' }}>
-                  Upload a CSV file
+                  Upload a CSV file or choose a file from History
                 </p>
               </div>
             )}
@@ -1051,11 +1068,6 @@ const Analytics = () => {
                     </span>
                   </h3>
                 </div>
-                {results && (consolidatedRules.length > 0 || results.frequent_itemsets?.length > 0) && (
-                  <button onClick={handleExportCSV} className="btn btn-secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem' }}>
-                    <Download size={16} /> Export Report (CSV)
-                  </button>
-                )}
               </div>
 
               {/* Contextual Explanation Block */}
@@ -1442,7 +1454,6 @@ const Analytics = () => {
                                         {action}
                                       </div>
                                     </td>
-
                                   </tr>
                                 );
                               })}
@@ -1804,6 +1815,8 @@ const Analytics = () => {
           </div>
         </div>
       )}
+
+
     </div>
   );
 };

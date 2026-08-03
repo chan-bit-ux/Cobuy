@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import pandas as pd
 import time
@@ -102,9 +102,12 @@ def _require_shop_admin(user_info):
 _require_admin = _require_shop_admin
 
 def _log_current_user_action(action, details_dict=None):
-    """Convenience wrapper — resolves store_id automatically."""
+    """Convenience wrapper — resolves store_id automatically. Logs user activity only."""
     user_info = get_current_user()
     if not user_info:
+        return
+    # Exclude shop administrators (audit log is for user activity)
+    if user_info.get('role') == 'shop_admin' or user_info.get('account_type') == 'admin':
         return
     store_id = _get_store_id_for_user(user_info)
     db.log_activity(store_id, user_info['email'], action, details_dict)
@@ -825,6 +828,8 @@ def mine_rules():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     dataset_id = request.args.get('dataset_id')
@@ -986,6 +991,179 @@ def delete_dataset_endpoint(dataset_id):
         })
     return jsonify({'message': 'Dataset deleted successfully'})
 
+def generate_recommendations_csv(dataset_id, user_email=None):
+    """Generate recommendation results CSV for a dataset ID."""
+    transactions = db.get_transactions(user_email=user_email, dataset_id=dataset_id)
+    if not transactions:
+        transactions = db.get_transactions(dataset_id=dataset_id)
+    
+    if not transactions:
+        return "No transaction data found for dataset."
+
+    dataset_info = db.get_dataset_by_id(dataset_id, user_email=user_email) if user_email else None
+    if not dataset_info:
+        dataset_info = db.get_dataset_by_id(dataset_id)
+        
+    ds_name = dataset_info.get('name', '') if dataset_info else ''
+    market_type = dataset_info.get('market_type') if (dataset_info and dataset_info.get('market_type') and dataset_info.get('market_type') != 'Default/unknown') else None
+    if not market_type:
+        market_type = infer_market_type(ds_name, transactions)
+        
+    market_config = MARKET_TYPE_THRESHOLDS.get(market_type, MARKET_TYPE_THRESHOLDS['Default/unknown'])
+    curr_supp = market_config['min_support']
+    curr_conf = market_config['min_confidence']
+    fixed_lift = market_config['min_lift']
+    
+    FLOOR_SUPPORT = 0.0001
+    FLOOR_CONFIDENCE = 0.02
+    MIN_RULES_TARGET = 3
+
+    te = TransactionEncoder()
+    te_ary = te.fit(transactions).transform(transactions)
+    df_te = pd.DataFrame(te_ary, columns=te.columns_)
+
+    num_tx = len(transactions)
+    all_items = [item for sublist in transactions for item in sublist]
+    num_items = len(set(all_items))
+    
+    if num_tx >= 500 or num_items >= 50:
+        selected_algorithm = 'fpgrowth'
+        algorithm_note = 'FP-Growth'
+    else:
+        selected_algorithm = 'apriori'
+        algorithm_note = 'Apriori'
+
+    best_rules = pd.DataFrame()
+    best_frequent_itemsets = pd.DataFrame()
+    used_supp = curr_supp
+    used_conf = curr_conf
+    step = 0
+
+    while True:
+        if selected_algorithm == 'apriori':
+            frequent_itemsets = apriori(df_te, min_support=curr_supp, use_colnames=True)
+        else:
+            frequent_itemsets = fpgrowth(df_te, min_support=curr_supp, use_colnames=True)
+            
+        if frequent_itemsets.empty:
+            current_rules = pd.DataFrame()
+        else:
+            current_rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=curr_conf)
+            if not current_rules.empty:
+                current_rules = current_rules[current_rules['lift'] >= fixed_lift]
+                
+        if not current_rules.empty and (best_rules.empty or len(current_rules) > len(best_rules)):
+            best_rules = current_rules
+            best_frequent_itemsets = frequent_itemsets
+            used_supp = curr_supp
+            used_conf = curr_conf
+            
+        if len(current_rules) >= MIN_RULES_TARGET:
+            best_rules = current_rules
+            best_frequent_itemsets = frequent_itemsets
+            used_supp = curr_supp
+            used_conf = curr_conf
+            break
+            
+        if curr_supp <= FLOOR_SUPPORT and curr_conf <= FLOOR_CONFIDENCE:
+            break
+            
+        step += 1
+        next_supp = max(curr_supp / 2.0, FLOOR_SUPPORT)
+        next_conf = max(curr_conf - 0.05, FLOOR_CONFIDENCE)
+        if next_supp == curr_supp and next_conf == curr_conf:
+            break
+        curr_supp = next_supp
+        curr_conf = next_conf
+
+    csv_lines = []
+    csv_lines.append("=== SUMMARY STATISTICS & PARAMETERS ===")
+    csv_lines.append(f"Total Purchases,{num_tx}")
+    csv_lines.append(f"Different Items Sold Count,{num_items}")
+    csv_lines.append(f"Algorithm Used,{algorithm_note}")
+    csv_lines.append(f"Market Type,{market_type}")
+    csv_lines.append(f"Final Support Threshold,{(used_supp * 100):.2f}%")
+    csv_lines.append(f"Final Confidence Threshold,{(used_conf * 100):.2f}%")
+    csv_lines.append("")
+
+    csv_lines.append("=== COMMON ITEM COMBOS ===")
+    csv_lines.append("Common Item Combos,Qty,N-Item Size,How Common This Is")
+    if not best_frequent_itemsets.empty:
+        for _, row in best_frequent_itemsets.iterrows():
+            items = list(row['itemsets'])
+            items_str = f'"{", ".join(items)}"'
+            supp_val = float(row['support'])
+            qty = int(round(supp_val * num_tx))
+            size_str = f"{len(items)}-item set"
+            supp_pct = f"{(supp_val * 100):.2f}%"
+            csv_lines.append(f"{items_str},{qty},{size_str},{supp_pct}")
+    else:
+        csv_lines.append("No common item combos found,,,")
+    csv_lines.append("")
+
+    csv_lines.append("=== BUYING PATTERNS (RECOMMENDATIONS) ===")
+    csv_lines.append("Frequently Bought Together,Buying Pattern,How Likely,How Strong the Link Is,Support,Confidence,Lift,Leverage,Conviction,Suggested Action")
+    if not best_rules.empty:
+        for _, row in best_rules.iterrows():
+            ant = list(row['antecedents'])
+            cons = list(row['consequents'])
+            all_items = ant + cons
+            fbt = f'"{ " + ".join(all_items) }"'
+            pattern_str = f'"{", ".join(ant)} -> {", ".join(cons)}"'
+            supp = float(row['support'])
+            conf = float(row['confidence'])
+            lift = float(row['lift'])
+            lev = float(row.get('leverage', 0.0))
+            conv = float(row.get('conviction', 0.0))
+            if math.isinf(conv):
+                conv = 999.0
+
+            conf_pct = f"{(conf * 100):.1f}%"
+            lift_str = f"{lift:.2f}"
+            
+            if conf >= 0.8:
+                action = f"Create promotional bundle pairing '{', '.join(ant)}' with '{', '.join(cons)}'"
+            elif conf >= 0.5:
+                action = f"Cross-promote '{', '.join(cons)}' on detail pages for '{', '.join(ant)}'"
+            else:
+                action = f"Optimize placement: display '{', '.join(cons)}' near '{', '.join(ant)}'"
+
+            csv_lines.append(f'{fbt},{pattern_str},{conf_pct},{lift_str},{(supp*100):.2f}%,{conf_pct},{lift_str},{lev:.4f},{conv:.2f},"{action}"')
+    else:
+        csv_lines.append("No buying patterns were found,,,,,,,,")
+
+    return "\n".join(csv_lines)
+
+@app.route('/api/admin/uploads/<int:upload_id>/export', methods=['GET'])
+@app.route('/api/recommendations/export', methods=['GET'])
+def export_recommendation_results(upload_id=None):
+    user_info = get_current_user()
+    err = _require_shop_admin(user_info)
+    if err:
+        return err
+
+    target_id = upload_id or request.args.get('upload_id') or request.args.get('dataset_id')
+    if not target_id:
+        return jsonify({'error': 'upload_id is required'}), 400
+
+    try:
+        target_id = int(target_id)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid upload_id parameter'}), 400
+
+    user_email = get_current_user_email()
+    csv_payload = generate_recommendations_csv(target_id, user_email=user_email)
+
+    filename = f"recommendation_results_{target_id}.csv"
+    return Response(
+        csv_payload,
+        mimetype="text/csv",
+        headers={
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
 @app.route('/api/history/<int:dataset_id>/activate', methods=['POST'])
 @app.route('/api/datasets/<int:dataset_id>/activate', methods=['POST'])
 def activate_dataset_endpoint(dataset_id):
@@ -1121,16 +1299,18 @@ def run_benchmark():
 
     params = request.json or {}
     dataset_id = params.get('dataset_id') or request.args.get('dataset_id')
-    user_email = get_current_user_email()
     if not dataset_id:
         datasets = db.get_datasets(user_email=user_email)
+        if not datasets:
+            datasets = db.get_datasets()
         if datasets:
             dataset_id = datasets[0]['id']
-    transactions = db.get_transactions(user_email=user_email, dataset_id=dataset_id)
+
+    transactions = db.get_transactions(dataset_id=dataset_id) if dataset_id else db.get_transactions(user_email=user_email)
     if not transactions or len(transactions) < 5:
         return jsonify({'error': 'Please upload a larger dataset first to run the performance benchmark (min 5 transactions).'}), 400
         
-    dataset_info = db.get_dataset_by_id(dataset_id, user_email=user_email) if dataset_id else None
+    dataset_info = db.get_dataset_by_id(dataset_id) if dataset_id else None
     market_type = dataset_info.get('market_type') if (dataset_info and dataset_info.get('market_type') and dataset_info.get('market_type') != 'Default/unknown') else None
     if not market_type:
         ds_name = dataset_info.get('name', '') if dataset_info else ''

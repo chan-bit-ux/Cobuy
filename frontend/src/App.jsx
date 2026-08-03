@@ -482,27 +482,25 @@ const Sidebar = ({ onLogout, user, theme, onToggleTheme, onOpenInvite }) => {
 
       <nav style={{ flex: 1 }}>
         <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <LayoutDashboard size={20} />
-          <span>Dashboard</span>
+          {isAdmin ? <ScrollText size={20} /> : <LayoutDashboard size={20} />}
+          <span>{isAdmin ? 'Audit Log' : 'Dashboard'}</span>
         </NavLink>
-        <NavLink to="/analytics" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <BarChart3 size={20} />
-          <span>Analytics</span>
-        </NavLink>
-        {user?.email === 'admin@ruleminer.ai' && (
+        {!isAdmin && (
+          <>
+            <NavLink to="/analytics" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <BarChart3 size={20} />
+              <span>Analytics</span>
+            </NavLink>
+            <NavLink to="/history" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <History size={20} />
+              <span>History</span>
+            </NavLink>
+          </>
+        )}
+        {isAdmin && (
           <NavLink to="/evaluation" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <Layers size={20} />
             <span>Evaluation</span>
-          </NavLink>
-        )}
-        <NavLink to="/history" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <History size={20} />
-          <span>History</span>
-        </NavLink>
-        {isAdmin && (
-          <NavLink to="/audit-log" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <ScrollText size={20} />
-            <span>Audit Log</span>
           </NavLink>
         )}
       </nav>
@@ -526,20 +524,6 @@ const Sidebar = ({ onLogout, user, theme, onToggleTheme, onOpenInvite }) => {
           <User size={20} />
           <span>Profile</span>
         </NavLink>
-        <div
-          onClick={onToggleTheme}
-          className="nav-link"
-          style={{
-            cursor: 'pointer',
-            background: 'var(--sidebar-active-bg)',
-            color: 'var(--primary-color)',
-            marginTop: '0.5rem',
-            marginBottom: '0.5rem'
-          }}
-        >
-          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-        </div>
         <div
           onClick={onLogout}
           className="nav-link"
@@ -625,8 +609,6 @@ function App() {
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      ) : isUnlinkedMember ? (
-        <JoinStoreScreen user={user} onJoined={handleLogin} onLogout={handleLogout} />
       ) : (
         <div style={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
           {showInvitePanel && (
@@ -648,12 +630,12 @@ function App() {
               <NotificationBell user={user} onLogin={handleLogin} />
             </div>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/" element={isAdmin ? <ActivityLog /> : <Dashboard />} />
+              <Route path="/analytics" element={!isAdmin ? <Analytics /> : <Navigate to="/" replace />} />
               <Route path="/evaluation" element={user?.role === 'shop_admin' ? <Evaluation /> : <Navigate to="/" replace />} />
-              <Route path="/history" element={<Dataset />} />
+              <Route path="/history" element={!isAdmin ? <Dataset /> : <Navigate to="/" replace />} />
               <Route path="/data" element={<Navigate to="/history" replace />} />
-              <Route path="/audit-log" element={isAdmin ? <ActivityLog /> : <Navigate to="/" replace />} />
+              <Route path="/audit-log" element={<Navigate to="/" replace />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/profile" element={<Profile user={user} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
