@@ -701,7 +701,8 @@ const Analytics = () => {
   const groupedSets = getGroupedItemsets();
 
 
-  const hasActiveSource = (file && uploadStatus === 'success') || (datasetId && activeDatasetName && stats.active);
+  const hasActiveSource = Boolean(file || datasetId || stats.active);
+  const isRunActive = miningStatus === 'success' || !!results;
 
   return (
     <div className="fade-in">
@@ -744,7 +745,7 @@ const Analytics = () => {
               <Database size={16} /> Data Setup
             </h3>
 
-            {datasetId && activeDatasetName && (
+            {(datasetId || activeDatasetName) && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -758,8 +759,8 @@ const Analytics = () => {
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', overflow: 'hidden', marginRight: '0.5rem' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Dataset</span>
-                  <span className="mono" style={{ color: '#fff', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={activeDatasetName}>
-                    {activeDatasetName}
+                  <span className="mono" style={{ color: '#fff', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={activeDatasetName || (file ? file.name : `Dataset #${datasetId}`)}>
+                    {activeDatasetName || (file ? file.name : `Dataset #${datasetId}`)}
                   </span>
                 </div>
                 <Link to="/history" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '600', fontSize: '0.75rem', flexShrink: 0 }}>
@@ -779,7 +780,8 @@ const Analytics = () => {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
+                  cursor: isRunActive ? 'not-allowed' : 'pointer',
+                  opacity: isRunActive ? 0.5 : 1,
                   background: file ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
                   transition: 'var(--transition)',
                   marginBottom: '0.5rem',
@@ -787,10 +789,16 @@ const Analytics = () => {
                   boxSizing: 'border-box',
                   overflow: 'hidden'
                 }}
-                onClick={() => document.getElementById('file-upload').click()}
+                title={isRunActive ? "Analysis already completed. Click 'Clear Session' to upload another file." : "Click to choose a CSV file"}
+                onClick={() => {
+                  if (!isRunActive) {
+                    document.getElementById('file-upload').click();
+                  }
+                }}
               >
                 <input
                   type="file" id="file-upload" hidden
+                  disabled={isRunActive}
                   onChange={handleFileUpload}
                   accept=".csv, .xlsx, .xls"
                 />
@@ -809,11 +817,30 @@ const Analytics = () => {
                 </div>
               </div>
 
-
               <div style={{ minHeight: '20px', marginBottom: '0.5rem' }}>
-                {hasActiveSource && (
+                {hasActiveSource && stats.total_transactions > 0 && (
                   <div style={{ color: '#10b981', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: '600' }}>
                     <CheckCircle size={14} /> Ready to mine ({stats.total_transactions} transactions loaded)
+                  </div>
+                )}
+                {hasActiveSource && stats.total_transactions === 0 && (
+                  <div style={{
+                    marginTop: '0.5rem',
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    border: '1px solid rgba(245, 158, 11, 0.35)',
+                    color: '#fbbf24',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    lineHeight: '1.5',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.5rem'
+                  }}>
+                    <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '2px', color: '#fbbf24' }} />
+                    <div>
+                      <strong>Warning:</strong> Uploaded file contains 0 valid transactions. Ready to run algorithm, but will yield 0 outputs.
+                    </div>
                   </div>
                 )}
                 {duplicateNotice && (

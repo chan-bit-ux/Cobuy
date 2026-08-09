@@ -478,7 +478,19 @@ def upload_file():
         transactions, duplicates_removed, missing_removed, basket_values_list, date_range_days, basket_avg = parse_df_to_transactions(df)
 
         if not transactions:
-            return jsonify({'error': 'No valid transactions found in the uploaded file. Please make sure the format is correct.'}), 400
+            ds_id = db.add_dataset(file.filename, 0, 0, user_email=user_email, file_hash=file_hash, market_type='Default/unknown')
+            return jsonify({
+                'message': 'File uploaded with empty dataset warning',
+                'transaction_count': 0,
+                'unique_items': 0,
+                'dataset_id': ds_id,
+                'is_empty': True,
+                'warning': 'The uploaded file contains no valid transaction data (0 records).',
+                'cleaning_stats': {
+                    'missing_values_removed': missing_removed,
+                    'duplicate_items_removed': duplicates_removed
+                }
+            })
 
         total_tx = len(transactions)
         unique_items_count = len(set([item for sublist in transactions for item in sublist]))
@@ -548,13 +560,19 @@ def mine_rules():
     dataset_id = params.get('dataset_id') or request.args.get('dataset_id')
     user_email = get_current_user_email()
     if not dataset_id:
-        datasets = db.get_datasets(user_email=user_email)
-        if datasets:
-            dataset_id = datasets[0]['id']
+        return jsonify({'error': 'No dataset selected or active in analytics'}), 400
 
     transactions = db.get_transactions(user_email=user_email, dataset_id=dataset_id)
-    if not transactions:
-        return jsonify({'error': 'No data uploaded or recorded yet'}), 400
+    if transactions is None or len(transactions) == 0:
+        return jsonify({
+            'rules': [],
+            'frequent_itemsets': [],
+            'algorithm_used': algorithm,
+            'execution_time_seconds': 0.001,
+            'total_transactions': 0,
+            'is_empty': True,
+            'message': 'No association rules could be mined because the dataset contains 0 transactions.'
+        })
 
     try:
         start_time = time.time()
@@ -835,13 +853,21 @@ def get_stats():
     dataset_id = request.args.get('dataset_id')
     user_email = get_current_user_email()
     if not dataset_id:
-        datasets = db.get_datasets(user_email=user_email)
-        if datasets:
-            dataset_id = datasets[0]['id']
+        return jsonify({
+            'active': False,
+            'dataset_id': None,
+            'total_transactions': 0,
+            'unique_items_count': 0,
+            'top_items': [],
+            'all_items': [],
+            'recommended_algorithm': 'None'
+        })
     transactions = db.get_transactions(user_email=user_email, dataset_id=dataset_id)
     if transactions is None or len(transactions) == 0:
         return jsonify({
-            'active': False,
+            'active': True,
+            'is_empty': True,
+            'dataset_id': dataset_id,
             'total_transactions': 0,
             'unique_items_count': 0,
             'top_items': [],
@@ -881,6 +907,7 @@ def get_stats():
     
     return jsonify({
         'active': True,
+        'dataset_id': dataset_id,
         'total_transactions': total_transactions,
         'unique_items_count': unique_items_count,
         'top_items': formatted_all_items[:10],
@@ -1207,9 +1234,7 @@ def get_trends():
     dataset_id = request.args.get('dataset_id')
     user_email = get_current_user_email()
     if not dataset_id:
-        datasets = db.get_datasets(user_email=user_email)
-        if datasets:
-            dataset_id = datasets[0]['id']
+        return jsonify({'trends': []})
     transactions_data = db.get_transactions_with_dates(user_email=user_email, dataset_id=dataset_id)
     if not transactions_data:
         return jsonify({'trends': []})

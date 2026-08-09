@@ -6,7 +6,6 @@ import {
   Trash2, 
   History as HistoryIcon,
   Database,
-  Play,
   Download,
   Loader2
 } from 'lucide-react';
@@ -118,7 +117,7 @@ const Dataset = () => {
             File History
           </h1>
           <p className="page-subtitle">
-            Private history of all files uploaded under your account. Click any file to look back and rerun analytics.
+            Private history of all files uploaded under your account. Click any file to look back.
           </p>
         </div>
       </div>
@@ -185,25 +184,11 @@ const Dataset = () => {
                             width: 'fit-content'
                           }}
                           className="history-file-link"
-                          title="Click to look back on this file and rerun analytics"
+                          title="Click to look back on this file"
                         >
                           <FileText size={18} style={{ color: 'var(--primary-color)', flexShrink: 0 }} />
                           <span style={{ fontWeight: '700', color: 'var(--text-main)', textDecoration: 'underline', textUnderlineOffset: '4px' }}>
                             {ds.name}
-                          </span>
-                          <span style={{ 
-                            fontSize: '0.75rem', 
-                            color: 'var(--primary-color)', 
-                            background: 'rgba(99, 102, 241, 0.15)',
-                            padding: '0.2rem 0.6rem',
-                            borderRadius: '100px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                            fontWeight: '600',
-                            marginLeft: '0.5rem'
-                          }}>
-                            <Play size={10} fill="currentColor" /> Rerun Analytics
                           </span>
                         </div>
                       </td>
@@ -219,26 +204,18 @@ const Dataset = () => {
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.45rem',
-                            fontSize: '0.8rem',
-                            padding: '0.45rem 0.85rem',
+                            justifyContent: 'center',
+                            padding: '0.45rem 0.6rem',
                             borderRadius: '6px',
                             cursor: (isProcessing || isExporting) ? 'not-allowed' : 'pointer',
                             opacity: (isProcessing || isExporting) ? 0.6 : 1,
-                            fontWeight: '600',
                             transition: 'all 0.2s ease'
                           }}
                         >
                           {isExporting ? (
-                            <>
-                              <Loader2 size={14} className="spin" />
-                              <span>Downloading...</span>
-                            </>
+                            <Loader2 size={18} className="spin" />
                           ) : (
-                            <>
-                              <Download size={14} />
-                              <span>Download</span>
-                            </>
+                            <Download size={18} />
                           )}
                         </button>
                       </td>
