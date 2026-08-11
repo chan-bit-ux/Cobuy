@@ -590,6 +590,9 @@ function App() {
   const handleLogin = (token, userData) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.removeItem('activeDatasetId');
+    localStorage.removeItem('activeDatasetName');
+    sessionStorage.clear();
     setUser(userData);
     setIsAuthenticated(true);
   };
@@ -597,6 +600,9 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('activeDatasetId');
+    localStorage.removeItem('activeDatasetName');
+    sessionStorage.clear();
     setUser(null);
     setIsAuthenticated(false);
   };

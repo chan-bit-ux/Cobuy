@@ -166,13 +166,13 @@ const Analytics = () => {
   };
 
   const CATEGORY_KEYWORDS = {
-    beverage:   ['latte','coffee','espresso','americano','cappuccino','macchiato','tea','juice','soda','water','milk','drink','smoothie','frappe','beer','cola'],
-    baked_good: ['croissant','bagel','muffin','scone','bread','cookie','pastry','donut','cake','bun','roll','pretzel'],
-    food:       ['sandwich','salad','wrap','bowl','rice','noodle','chicken','beef','fish','egg','meal','kibble','treat','pet food','dog food','cat food','burger','hotdog','peanuts'],
-    condiment:  ['sugar','syrup','sauce','cream','butter','jam','honey','ketchup','mustard','dressing','spread','creamer'],
-    consumable: ['shampoo','soap','toothpaste','detergent','litter','wipes','tissue','sanitizer','diapers','charcoal','lighter','sponge','bedding'],
-    accessory:  ['leash','collar','bowl','toy','brush','bag','bottle','cup','mug','tray','case','scoop','bone','nip'],
-    modifier:   ['shot','extra','decaf','oat','almond','skim','half','large','small','medium','hot','cold','ice'],
+    beverage: ['latte', 'coffee', 'espresso', 'americano', 'cappuccino', 'macchiato', 'tea', 'juice', 'soda', 'water', 'milk', 'drink', 'smoothie', 'frappe', 'beer', 'cola'],
+    baked_good: ['croissant', 'bagel', 'muffin', 'scone', 'bread', 'cookie', 'pastry', 'donut', 'cake', 'bun', 'roll', 'pretzel'],
+    food: ['sandwich', 'salad', 'wrap', 'bowl', 'rice', 'noodle', 'chicken', 'beef', 'fish', 'egg', 'meal', 'kibble', 'treat', 'pet food', 'dog food', 'cat food', 'burger', 'hotdog', 'peanuts'],
+    condiment: ['sugar', 'syrup', 'sauce', 'cream', 'butter', 'jam', 'honey', 'ketchup', 'mustard', 'dressing', 'spread', 'creamer'],
+    consumable: ['shampoo', 'soap', 'toothpaste', 'detergent', 'litter', 'wipes', 'tissue', 'sanitizer', 'diapers', 'charcoal', 'lighter', 'sponge', 'bedding'],
+    accessory: ['leash', 'collar', 'bowl', 'toy', 'brush', 'bag', 'bottle', 'cup', 'mug', 'tray', 'case', 'scoop', 'bone', 'nip'],
+    modifier: ['shot', 'extra', 'decaf', 'oat', 'almond', 'skim', 'half', 'large', 'small', 'medium', 'hot', 'cold', 'ice'],
   };
 
   const inferItemCategory = (itemName, marketType) => {
@@ -222,7 +222,7 @@ const Analytics = () => {
       return { score: 1.0, isCoherent: true, categories: (itemList || []).map(i => inferItemCategory(i, marketType)) };
     }
     const categories = itemList.map(item => inferItemCategory(item, marketType));
-    
+
     // Check if all items share the exact same category
     const uniqueCats = new Set(categories);
     if (uniqueCats.size === 1) {
@@ -260,52 +260,52 @@ const Analytics = () => {
   const ACTION_TEMPLATES = {
     'Coffee Shop': {
       placement: {
-        single:   (anchor, paired)   => `Feature ${paired} alongside ${anchor} on the counter or menu board.`,
+        single: (anchor, paired) => `Feature ${paired} alongside ${anchor} on the counter or menu board.`,
         flexible: (anchor, itemList) => `${anchor} pairs closely with several items — display ${itemList} nearby so customers can pick one.`,
       },
       cross_promo: {
-        single:   (anchor, paired)   => `Offer a discount when ${anchor} and ${paired} are ordered together.`,
+        single: (anchor, paired) => `Offer a discount when ${anchor} and ${paired} are ordered together.`,
         flexible: (anchor, itemList) => `Offer a 'pick-your-pastry' discount when ${anchor} is ordered with any of: ${itemList}.`,
       },
       bundle: {
-        single:   (anchor, paired)   => `Create a combo meal pairing ${anchor} with ${paired}.`,
+        single: (anchor, paired) => `Create a combo meal pairing ${anchor} with ${paired}.`,
         flexible: (anchor, itemList) => `Offer a combo where customers choose one of ${itemList} to pair with ${anchor}.`,
       },
     },
     'Convenience Store': {
       placement: {
-        single:   (anchor, paired)   => `Place ${anchor} and ${paired} on the same aisle or end-cap.`,
+        single: (anchor, paired) => `Place ${anchor} and ${paired} on the same aisle or end-cap.`,
         flexible: (anchor, itemList) => `Place ${anchor} near ${itemList} so customers can grab whichever fits.`,
       },
       cross_promo: {
-        single:   (anchor, paired)   => `Run a 'grab both and save' register discount for ${anchor} + ${paired}.`,
+        single: (anchor, paired) => `Run a 'grab both and save' register discount for ${anchor} + ${paired}.`,
         flexible: (anchor, itemList) => `Run a discount when ${anchor} is bought with any of: ${itemList}.`,
       },
       bundle: {
-        single:   (anchor, paired)   => `Bundle ${anchor} and ${paired} into a value pack at checkout.`,
+        single: (anchor, paired) => `Bundle ${anchor} and ${paired} into a value pack at checkout.`,
         flexible: (anchor, itemList) => `Offer a mix-and-match value pack: ${anchor} plus a choice of ${itemList}.`,
       },
     },
     'Pet Food': {
       placement: {
-        single:   (anchor, paired)   => `Group ${anchor} and ${paired} into the same store section.`,
+        single: (anchor, paired) => `Group ${anchor} and ${paired} into the same store section.`,
         flexible: (anchor, itemList) => `Group ${anchor} with ${itemList} in the same section so customers can compare options.`,
       },
       cross_promo: {
-        single:   (anchor, paired)   => `Offer a loyalty discount when ${anchor} and ${paired} are purchased together.`,
+        single: (anchor, paired) => `Offer a loyalty discount when ${anchor} and ${paired} are purchased together.`,
         flexible: (anchor, itemList) => `Offer a loyalty discount when ${anchor} is purchased with any of: ${itemList}.`,
       },
       bundle: {
-        single:   (anchor, paired)   => `Create a starter kit combining ${anchor} and ${paired}.`,
+        single: (anchor, paired) => `Create a starter kit combining ${anchor} and ${paired}.`,
         flexible: (anchor, itemList) => `Offer a starter kit where customers pick one of ${itemList} to go with ${anchor}.`,
       },
     },
   };
 
   const GENERIC_TEMPLATES = {
-    placement:   { single: () => 'Consider placing these items near each other.' },
+    placement: { single: () => 'Consider placing these items near each other.' },
     cross_promo: { single: () => 'Run a cross-promotional discount to encourage joint purchases.' },
-    bundle:      { single: () => 'Create a bundled offer or end-cap display combining these items.' },
+    bundle: { single: () => 'Create a bundled offer or end-cap display combining these items.' },
   };
 
   /**
@@ -317,7 +317,7 @@ const Analytics = () => {
    */
   const getSuggestedAction = (category, marketType, anchor, suggestion) => {
     const { tieMode, consequents, tieItems } = suggestion;
-    const paired   = consequents.join(', ');
+    const paired = consequents.join(', ');
     const itemList = tieItems.join(', ');
     const storeTemplates = ACTION_TEMPLATES[marketType];
     if (storeTemplates && storeTemplates[category] && storeTemplates[category][tieMode]) {
@@ -521,6 +521,14 @@ const Analytics = () => {
       const response = await axios.post(`${API_BASE}/mine`, payload);
       setResults(response.data);
       sessionStorage.setItem('analytics_results', JSON.stringify(response.data));
+      if (datasetId) {
+        localStorage.setItem('activeDatasetId', datasetId);
+        if (activeDatasetName) {
+          localStorage.setItem('activeDatasetName', activeDatasetName);
+        } else if (file && file.name) {
+          localStorage.setItem('activeDatasetName', file.name);
+        }
+      }
       setMiningStatus('success');
     } catch (err) {
       setMiningStatus('error');
@@ -620,23 +628,23 @@ const Analytics = () => {
       }
 
       consolidated.push({
-        antecedents:  top.antecedents,
-        consequents:  top.consequents,
+        antecedents: top.antecedents,
+        consequents: top.consequents,
         tieItems,
-        confidence:   top.confidence,
-        lift:         top.lift,
-        support:      top.support,
+        confidence: top.confidence,
+        lift: top.lift,
+        support: top.support,
         tieMode,
         allTiedRules,
         isLowCoherence: top.isLowCoherence,
         coherenceScore: top.coherenceScore,
         // ── Enrichment fields from backend (passed through from top rule) ──
-        ant_tx_count:             top.ant_tx_count,
-        rule_tx_count:            top.rule_tx_count,
+        ant_tx_count: top.ant_tx_count,
+        rule_tx_count: top.rule_tx_count,
         consequent_baseline_rate: top.consequent_baseline_rate,
-        avg_rule_basket:          top.avg_rule_basket,
-        monthly_estimate:         top.monthly_estimate,
-        has_revenue_data:         top.has_revenue_data,
+        avg_rule_basket: top.avg_rule_basket,
+        monthly_estimate: top.monthly_estimate,
+        has_revenue_data: top.has_revenue_data,
       });
     });
 
@@ -1619,9 +1627,9 @@ const Analytics = () => {
           zIndex: 9999,
           padding: '1.5rem'
         }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) setShowMiningModal(false);
-        }}>
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowMiningModal(false);
+          }}>
           <div className="card fade-in" style={{
             maxWidth: '840px',
             width: '100%',

@@ -103,7 +103,7 @@ const Evaluation = () => {
       setExportingStates(prev => ({ ...prev, [datasetId]: true }));
       const token = localStorage.getItem('token') || '';
       const userEmail = localStorage.getItem('userEmail') || '';
-      
+
       const response = await axios.get(`${API_BASE}/admin/uploads/${datasetId}/export`, {
         responseType: 'blob',
         headers: {
@@ -200,8 +200,6 @@ const Evaluation = () => {
         } else {
           setActiveDatasetId(mergedList[0].dataset_id);
           setActiveDatasetName(mergedList[0].filename);
-          localStorage.setItem('activeDatasetId', mergedList[0].dataset_id);
-          localStorage.setItem('activeDatasetName', mergedList[0].filename);
         }
       }
     } catch (err) {
