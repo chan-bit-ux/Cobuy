@@ -57,6 +57,21 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('activeDatasetId');
+      localStorage.removeItem('activeDatasetName');
+      sessionStorage.clear();
+      window.dispatchEvent(new Event('auth-session-expired'));
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ── Invite Panel (shown inside sidebar for admins) ────────────────────────────
 const InvitePanel = ({ user, onClose }) => {
   const [email, setEmail] = useState('');
@@ -582,6 +597,24 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null);
+      setIsAuthenticated(false);
+    };
+    const handleStorageChange = (e) => {
+      if (e.key === 'token' && !e.newValue) {
+        handleSessionExpired();
+      }
+    };
+    window.addEventListener('auth-session-expired', handleSessionExpired);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('auth-session-expired', handleSessionExpired);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const handleToggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));

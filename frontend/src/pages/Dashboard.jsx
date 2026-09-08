@@ -206,31 +206,144 @@ const Dashboard = () => {
 
       y += 26;
 
-      // 4. Store Sales Activity Chart ("How Busy Each Day Was")
+      // 4. Store Sales Activity Chart ("Daily Transaction Volume" - Native Vector PDF Bar Chart)
       pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(11);
+      pdf.setFontSize(10.5);
       pdf.setTextColor(15, 23, 42);
-      pdf.text('2. Store Sales Activity Graph (How Busy Each Day Was)', margin, y);
+      pdf.text('2. Store Sales Activity Graph (Daily Transaction Volume)', margin, y);
       y += 5;
 
-      try {
-        const chartElement = document.getElementById('dashboard-sales-chart');
-        if (chartElement) {
-          const canvas = await html2canvas(chartElement, {
-            scale: 2,
-            backgroundColor: '#0f172a',
-            logging: false,
-            useCORS: true
-          });
-          const imgData = canvas.toDataURL('image/png');
-          const imgH = Math.min((canvas.height * contentWidth) / canvas.width, 70);
-          
-          pdf.addImage(imgData, 'PNG', margin, y, contentWidth, imgH);
-          y += imgH + 8;
+      const chartBoxH = 64;
+      const chartBoxW = contentWidth;
+
+      // Clean Light Card Container Background
+      pdf.setFillColor(250, 252, 255);
+      pdf.setDrawColor(226, 232, 240);
+      pdf.roundedRect(margin, y, chartBoxW, chartBoxH, 3, 3, 'FD');
+
+      // Card Header inside PDF Chart: "Daily Transaction Volume"
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('Daily Transaction Volume', margin + 10, y + 8.5);
+
+      const chartAreaX = margin + 25;
+      const chartAreaY = y + 16;
+      const chartAreaW = chartBoxW - 31;
+      const chartAreaH = chartBoxH - 26;
+
+      // Vertical Y-Axis Title Label: "Number of Receipts" (Centered vertically along the Y-axis next to tick 320)
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(30, 27, 75);
+      pdf.text('Number of Receipts', margin + 12.5, chartAreaY + (chartAreaH / 2), { angle: 90, align: 'center' });
+
+      // Calculate grid steps
+      const maxVal = maxCount > 0 ? maxCount : 100;
+      const gridStep = Math.ceil(maxVal / 4 / 20) * 20 || 50;
+      const topTick = gridStep * 4 > maxVal ? gridStep * 4 : Math.ceil(maxVal / 50) * 50;
+      const yTicks = [0, Math.round(topTick * 0.25), Math.round(topTick * 0.5), Math.round(topTick * 0.75), topTick];
+
+      // Axis Lines
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setLineWidth(0.4);
+      pdf.line(chartAreaX, chartAreaY, chartAreaX, chartAreaY + chartAreaH);
+      pdf.line(chartAreaX, chartAreaY + chartAreaH, chartAreaX + chartAreaW, chartAreaY + chartAreaH);
+
+      // Draw Grid Lines & Y Tick Labels
+      yTicks.forEach(tickVal => {
+        const tickY = chartAreaY + chartAreaH - ((tickVal / topTick) * chartAreaH);
+        
+        if (tickVal > 0) {
+          pdf.setDrawColor(241, 245, 249);
+          pdf.setLineWidth(0.2);
+          pdf.line(chartAreaX, tickY, chartAreaX + chartAreaW, tickY);
         }
-      } catch (canvasErr) {
-        console.warn('Canvas capture warning:', canvasErr);
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(6);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(`${tickVal}`, chartAreaX - 3, tickY + 1.5, { align: 'right' });
+      });
+
+      // Draw Clean Vector Bars with Values on top
+      const numBars = filteredTrends.length;
+      if (numBars > 0) {
+        const barGap = 4;
+        const totalBarWidth = (chartAreaW - (barGap * (numBars + 1))) / numBars;
+        const barW = Math.min(18, totalBarWidth);
+        
+        filteredTrends.forEach((t, i) => {
+          const barX = chartAreaX + barGap + i * (barW + barGap);
+          const barH = Math.max(2, (t.count / topTick) * chartAreaH);
+          const barY = chartAreaY + chartAreaH - barH;
+          const isPeak = t.count === maxCount && maxCount > 0;
+          
+          if (isPeak) {
+            pdf.setFillColor(124, 58, 237); // Vibrant accent purple
+          } else {
+            pdf.setFillColor(99, 102, 241);  // Primary indigo
+          }
+          
+          pdf.rect(barX, barY, barW, barH, 'F');
+          
+          // Value on top of bar
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(5.5);
+          pdf.setTextColor(isPeak ? 124 : 79, isPeak ? 58 : 70, isPeak ? 237 : 229);
+          pdf.text(`${t.count}`, barX + barW / 2, barY - 1.5, { align: 'center' });
+
+          // Date label on X axis
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(6);
+          pdf.setTextColor(100, 116, 139);
+          let dateLabel = t.date;
+          if (dateLabel && dateLabel.includes('-')) {
+            const parts = dateLabel.split('-');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const mIdx = parseInt(parts[1], 10) - 1;
+            dateLabel = `${months[mIdx] || parts[1]} ${parts[2]}`;
+          }
+          pdf.text(dateLabel, barX + barW / 2, chartAreaY + chartAreaH + 4, { align: 'center' });
+        });
       }
+
+      // Horizontal Flat X-Axis Title Label: "Transaction Date"
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(30, 27, 75);
+      pdf.text('Transaction Date', chartAreaX + (chartAreaW / 2), chartAreaY + chartAreaH + 8.5, { align: 'center' });
+
+      y += chartBoxH + 4;
+
+      // Graph Interpretation block (Formatted Executive Card Box)
+      const minCount = filteredTrends.length > 0 ? Math.min(...filteredTrends.map(t => t.count)) : 0;
+      const peakStr = peakDay ? `Peak recorded volume occurred on ${peakDay.date} with ${peakDay.count} receipts.` : '';
+      const interpText = `Daily transaction volume ranges between ${minCount} and ${maxCount} receipts per day. ${peakStr} Management can use peak volumes for staff scheduling and stock prep.`;
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      const splitInterp = pdf.splitTextToSize(interpText, contentWidth - 14);
+      const interpCardH = Math.max(13, splitInterp.length * 3.5 + 8);
+
+      pdf.setFillColor(248, 250, 252);
+      pdf.setDrawColor(226, 232, 240);
+      pdf.roundedRect(margin, y, contentWidth, interpCardH, 2, 2, 'FD');
+
+      pdf.setFillColor(79, 70, 229);
+      pdf.rect(margin, y, 2.5, interpCardH, 'F');
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(30, 27, 75);
+      pdf.text('What this graph means for your store:', margin + 6, y + 4.8);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(71, 85, 105);
+      pdf.text(splitInterp, margin + 6, y + 9);
+
+      y += interpCardH + 5;
 
       // 5. Top 5 Selling Products Section (Fills Page 1 perfectly!)
       pdf.setFont('helvetica', 'bold');
@@ -609,40 +722,12 @@ const Dashboard = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-            {/* Chart 1: Option 2 Executive Bar Pillars */}
+            {/* Chart 1: Daily Transaction Volume Bar Pillars */}
             <div className="card" id="dashboard-sales-chart">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div>
-                  <h3 style={{ fontWeight: '700', fontSize: '1.15rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    How Busy Each Day Was
-                    {peakDay && (
-                      <span style={{ fontSize: '0.75rem', background: 'var(--badge-bg)', color: 'var(--accent-color)', padding: '0.2rem 0.6rem', borderRadius: '100px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', border: '1px solid var(--border-color)' }}>
-                        🔥 Peak: {peakDay.date} ({peakDay.count} tx)
-                      </span>
-                    )}
-                  </h3>
-                </div>
-                <div style={{ display: 'flex', gap: '0.4rem', background: 'var(--inner-box-bg)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                  {['7D', '30D', 'All'].map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setTimeFilter(filter)}
-                      style={{
-                        background: timeFilter === filter ? 'var(--primary-color)' : 'transparent',
-                        color: timeFilter === filter ? '#fff' : 'var(--text-muted)',
-                        border: 'none',
-                        padding: '0.3rem 0.75rem',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      {filter === 'All' ? 'All Time' : filter}
-                    </button>
-                  ))}
-                </div>
+              <div style={{ marginBottom: '0.85rem' }}>
+                <h3 style={{ fontWeight: '700', fontSize: '1.15rem', color: 'var(--text-main)' }}>
+                  Daily Transaction Volume
+                </h3>
               </div>
 
               <div style={{ height: '300px' }}>
@@ -652,11 +737,11 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={filteredTrends} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
+                    <BarChart data={filteredTrends} margin={{ top: 15, right: 20, left: 15, bottom: 25 }}>
                       <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--border-color)" strokeOpacity={0.6} />
                       <XAxis
                         dataKey="date"
-                        axisLine={false}
+                        axisLine={{ stroke: 'var(--border-color)', strokeWidth: 1.5 }}
                         tickLine={false}
                         tick={{ fill: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}
                         padding={{ left: 15, right: 15 }}
@@ -670,14 +755,28 @@ const Dashboard = () => {
                           const day = parts[2];
                           return `${month} ${day}`;
                         }}
+                        label={{
+                          value: 'Transaction Date',
+                          position: 'insideBottom',
+                          offset: -18,
+                          style: { fill: 'var(--text-main)', fontSize: 12, fontWeight: 700 }
+                        }}
                       />
                       <YAxis
-                        axisLine={false}
+                        axisLine={{ stroke: 'var(--border-color)', strokeWidth: 1.5 }}
                         tickLine={false}
                         tick={{ fill: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                        label={{
+                          value: 'Number of Receipts',
+                          angle: -90,
+                          position: 'insideLeft',
+                          offset: 10,
+                          dy: 60,
+                          style: { fill: 'var(--text-main)', fontSize: 12, fontWeight: 700, textAnchor: 'middle' }
+                        }}
                       />
                       <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'var(--inner-box-bg)', opacity: 0.5 }} />
-                      <Bar dataKey="count" name="Purchases" radius={[6, 6, 0, 0]} maxBarSize={45} animationDuration={450} isAnimationActive={true}>
+                      <Bar dataKey="count" name="Receipts" radius={[6, 6, 0, 0]} maxBarSize={45} animationDuration={450} isAnimationActive={true}>
                         {filteredTrends.map((entry, index) => {
                           const isPeak = entry.count === maxCount && maxCount > 0;
                           return (
@@ -695,6 +794,24 @@ const Dashboard = () => {
                   </ResponsiveContainer>
                 )}
               </div>
+
+              {filteredTrends.length > 0 && (
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '0.875rem 1.1rem',
+                  background: 'var(--inner-box-bg)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  fontSize: '0.83rem',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.5
+                }}>
+                  <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '0.25rem' }}>
+                    💡 What this graph means for your store:
+                  </strong>
+                  Daily transaction volume ranges between <strong>{Math.min(...filteredTrends.map(t => t.count))}</strong> and <strong>{maxCount} receipts</strong> per day. The peak recorded volume occurred on <strong>{peakDay?.date}</strong> with <strong>{peakDay?.count} receipts</strong> (busiest day). Use these insights to optimize staff scheduling and inventory stocking for high-demand days.
+                </div>
+              )}
             </div>
 
             {/* Chart 2: Option 2 Horizontal Leaderboard Progress Grid */}

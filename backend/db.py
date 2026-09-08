@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import datetime
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
 
@@ -38,9 +39,14 @@ def init_db():
     user_columns = [col[1] for col in cursor.fetchall()]
 
     for col_name, col_def in [
-        ('account_type', "ALTER TABLE users ADD COLUMN account_type TEXT DEFAULT 'admin'"),
-        ('store_id',     "ALTER TABLE users ADD COLUMN store_id INTEGER REFERENCES stores(id)"),
-        ('status',       "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'"),
+        ('account_type',     "ALTER TABLE users ADD COLUMN account_type TEXT DEFAULT 'admin'"),
+        ('store_id',         "ALTER TABLE users ADD COLUMN store_id INTEGER REFERENCES stores(id)"),
+        ('status',           "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'"),
+        ('failed_attempts', "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"),
+        ('lockout_level',    "ALTER TABLE users ADD COLUMN lockout_level INTEGER DEFAULT 0"),
+        ('locked_until',     "ALTER TABLE users ADD COLUMN locked_until TEXT"),
+        ('last_failed_login', "ALTER TABLE users ADD COLUMN last_failed_login TEXT"),
+        ('account_status',   "ALTER TABLE users ADD COLUMN account_status TEXT DEFAULT 'ACTIVE'"),
     ]:
         if col_name not in user_columns:
             try:
@@ -252,6 +258,119 @@ def update_user_role(email, role):
     conn.execute('UPDATE users SET role = ? WHERE email = ?', (role, email))
     conn.commit()
     conn.close()
+
+def get_user_lockout_info(email):
+    user = get_user(email)
+    if not user:
+        return None
+    
+    failed_attempts = user.get('failed_attempts') or 0
+    lockout_level = user.get('lockout_level') or 0
+    locked_until_str = user.get('locked_until')
+    account_status = user.get('account_status') or 'ACTIVE'
+    
+    is_locked = False
+    remaining_seconds = 0
+    
+    if locked_until_str:
+        try:
+            locked_until_dt = datetime.datetime.fromisoformat(locked_until_str.replace('Z', '+00:00'))
+            now_dt = datetime.datetime.now(datetime.timezone.utc)
+            if locked_until_dt > now_dt:
+                is_locked = True
+                remaining_seconds = int((locked_until_dt - now_dt).total_seconds())
+        except Exception:
+            pass
+
+    return {
+        'failed_attempts': failed_attempts,
+        'lockout_level': lockout_level,
+        'locked_until': locked_until_str,
+        'account_status': 'LOCKED' if is_locked else 'ACTIVE',
+        'is_locked': is_locked,
+        'remaining_seconds': max(0, remaining_seconds)
+    }
+
+def record_failed_login(email):
+    conn = get_db_connection()
+    user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    if not user:
+        conn.close()
+        return None
+    
+    user_dict = dict(user)
+    failed_attempts = (user_dict.get('failed_attempts') or 0) + 1
+    lockout_level = user_dict.get('lockout_level') or 0
+    locked_until_str = user_dict.get('locked_until')
+    
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    now_str = now_dt.isoformat()
+    
+    had_previous_lockout = False
+    if locked_until_str:
+        try:
+            prev_locked_until = datetime.datetime.fromisoformat(locked_until_str.replace('Z', '+00:00'))
+            if now_dt >= prev_locked_until:
+                had_previous_lockout = True
+        except Exception:
+            pass
+
+    if failed_attempts >= 3 or had_previous_lockout:
+        lockout_level = max(1, lockout_level + 1)
+        duration_minutes = min(1440, 10 * (2 ** (lockout_level - 1)))
+        locked_until_dt = now_dt + datetime.timedelta(minutes=duration_minutes)
+        locked_until_str = locked_until_dt.isoformat()
+        failed_attempts = 3
+        account_status = 'LOCKED'
+        
+        conn.execute('''
+            UPDATE users 
+            SET failed_attempts = ?, lockout_level = ?, locked_until = ?, last_failed_login = ?, account_status = ?
+            WHERE email = ?
+        ''', (failed_attempts, lockout_level, locked_until_str, now_str, account_status, email))
+        conn.commit()
+        conn.close()
+        
+        remaining_seconds = int(duration_minutes * 60)
+        return {
+            'is_locked': True,
+            'failed_attempts': failed_attempts,
+            'lockout_level': lockout_level,
+            'lockout_duration_minutes': duration_minutes,
+            'locked_until': locked_until_str,
+            'remaining_seconds': remaining_seconds,
+            'message': f'Too many failed attempts. Your account is locked for {duration_minutes} minutes.'
+        }
+    else:
+        attempts_remaining = 3 - failed_attempts
+        conn.execute('''
+            UPDATE users
+            SET failed_attempts = ?, last_failed_login = ?
+            WHERE email = ?
+        ''', (failed_attempts, now_str, email))
+        conn.commit()
+        conn.close()
+        
+        return {
+            'is_locked': False,
+            'failed_attempts': failed_attempts,
+            'attempts_remaining': attempts_remaining,
+            'message': f'Incorrect password. You have {attempts_remaining} more attempt{"s" if attempts_remaining > 1 else ""} before the account is temporarily locked.'
+        }
+
+def reset_user_lockout(email):
+    conn = get_db_connection()
+    conn.execute('''
+        UPDATE users
+        SET failed_attempts = 0, lockout_level = 0, locked_until = NULL, account_status = 'ACTIVE'
+        WHERE email = ?
+    ''', (email,))
+    conn.commit()
+    conn.close()
+
+def unlock_user_account(email):
+    reset_user_lockout(email)
+    return True
 
 # ── Store helpers ─────────────────────────────────────────────────────────────
 
@@ -656,9 +775,32 @@ def add_transactions(list_of_items, dataset_id=None, user_email=None, basket_val
 def get_datasets(user_email=None):
     conn = get_db_connection()
     if user_email:
-        rows = conn.execute('SELECT * FROM datasets WHERE user_email = ? ORDER BY upload_date DESC, id DESC', (user_email,)).fetchall()
+        rows = conn.execute('''
+            SELECT d.*, u.name as user_name 
+            FROM datasets d 
+            LEFT JOIN users u ON d.user_email = u.email 
+            WHERE d.user_email = ? 
+            ORDER BY d.upload_date DESC, d.id DESC
+        ''', (user_email,)).fetchall()
     else:
-        rows = conn.execute('SELECT * FROM datasets ORDER BY upload_date DESC, id DESC').fetchall()
+        rows = conn.execute('''
+            SELECT d.*, u.name as user_name 
+            FROM datasets d 
+            LEFT JOIN users u ON d.user_email = u.email 
+            ORDER BY d.upload_date DESC, d.id DESC
+        ''').fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_datasets_by_store(store_id):
+    conn = get_db_connection()
+    rows = conn.execute('''
+        SELECT d.*, u.name as user_name 
+        FROM datasets d 
+        LEFT JOIN users u ON d.user_email = u.email 
+        WHERE u.store_id = ? OR d.user_email IN (SELECT owner_email FROM stores WHERE id = ?)
+        ORDER BY d.upload_date DESC, d.id DESC
+    ''', (store_id, store_id)).fetchall()
     conn.close()
     return [dict(row) for row in rows]
 

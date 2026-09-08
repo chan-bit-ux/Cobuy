@@ -109,6 +109,10 @@ const Analytics = () => {
     return saved === 'true';
   });
   const [showMiningModal, setShowMiningModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [coBoughtResults, setCoBoughtResults] = useState([]);
+  const [loadingCoBought, setLoadingCoBought] = useState(false);
+  const [recommendationSearchTerm, setRecommendationSearchTerm] = useState('');
 
   const toggleRuleExpand = (idx) => {
     setExpandedRules(prev => ({
@@ -432,8 +436,41 @@ const Analytics = () => {
     }
   };
 
+  const fetchCoBoughtTogether = async (productName, overrideDatasetId = null) => {
+    if (!productName) {
+      setCoBoughtResults([]);
+      return;
+    }
+    setLoadingCoBought(true);
+    try {
+      const targetId = overrideDatasetId || datasetId;
+      const url = targetId
+        ? `${API_BASE}/frequently_bought_together?product=${encodeURIComponent(productName)}&dataset_id=${targetId}`
+        : `${API_BASE}/frequently_bought_together?product=${encodeURIComponent(productName)}`;
+      const response = await axios.get(url);
+      if (response.data && response.data.frequently_bought_together) {
+        setCoBoughtResults(response.data.frequently_bought_together);
+      } else {
+        setCoBoughtResults([]);
+      }
+    } catch (err) {
+      console.error('Error fetching co-bought items:', err);
+      setCoBoughtResults([]);
+    } finally {
+      setLoadingCoBought(false);
+    }
+  };
+
+  const handleSelectProduct = (productName) => {
+    setSelectedProduct(productName);
+    fetchCoBoughtTogether(productName);
+  };
+
   useEffect(() => {
     fetchStats();
+    if (selectedProduct) {
+      fetchCoBoughtTogether(selectedProduct, datasetId);
+    }
   }, [datasetId]);
 
   const handleFileUpload = async (e) => {
@@ -490,6 +527,8 @@ const Analytics = () => {
       setResults(null);
       setMiningStatus('idle');
       setCleaningStats(null);
+      setSelectedProduct(null);
+      setCoBoughtResults([]);
       sessionStorage.removeItem('analytics_file_name');
       sessionStorage.removeItem('analytics_cleaning_stats');
       sessionStorage.removeItem('analytics_results');
@@ -660,6 +699,15 @@ const Analytics = () => {
 
   const consolidatedRules = consolidateRules();
 
+  const filteredConsolidatedRules = consolidatedRules.filter(rule => {
+    if (!recommendationSearchTerm.trim()) return true;
+    const term = recommendationSearchTerm.toLowerCase();
+    const antMatch = (rule.antecedents || []).some(a => a.toLowerCase().includes(term));
+    const consMatch = (rule.consequents || []).some(c => c.toLowerCase().includes(term));
+    const tieMatch = (rule.tieItems || []).some(t => t.toLowerCase().includes(term));
+    return antMatch || consMatch || tieMatch;
+  });
+
   const getGroupedItemsets = () => {
     if (!results || !results.frequent_itemsets) return [];
     const marketType = results?.metrics?.adaptive_thresholds?.market_type || 'Default/unknown';
@@ -707,6 +755,17 @@ const Analytics = () => {
   };
 
   const groupedSets = getGroupedItemsets();
+
+  const filteredGroupedSets = groupedSets.map(group => {
+    if (!recommendationSearchTerm.trim()) return group;
+    const term = recommendationSearchTerm.toLowerCase();
+    const matchingItems = group.items.filter(item =>
+      (item.items || []).some(it => it.toLowerCase().includes(term))
+    );
+    return { ...group, items: matchingItems };
+  }).filter(group => group.items.length > 0);
+
+  const totalFilteredItemsetsCount = filteredGroupedSets.reduce((sum, group) => sum + group.items.length, 0);
 
 
   const hasActiveSource = Boolean(file || datasetId || stats.active);
@@ -945,7 +1004,7 @@ const Analytics = () => {
 
           <>
             {/* What's In Customers' Carts */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: '250px', maxHeight: '360px' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: '320px', maxHeight: '420px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
                   <Database size={18} style={{ color: 'var(--primary-color)' }} /> What's In Customers' Carts
@@ -996,63 +1055,193 @@ const Analytics = () => {
                     lineHeight: '1.4'
                   }}
                 >
-                  💡 <strong>What is How Often Bought?</strong> This shows how often a product makes it into a customer's shopping cart.
+                  💡 <strong>What is How Often Bought?</strong> This shows how often a product makes it into a customer's shopping cart. Click any product row to view items frequently bought together with it.
                 </div>
               )}
 
-              {/* Search filter for products */}
-              <div style={{ position: 'relative', marginBottom: '0.75rem' }}>
-                <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
-                <input
-                  type="text"
-                  placeholder="Search"
-                  className="input"
-                  style={{ paddingLeft: '30px', paddingItem: '0.4rem', fontSize: '0.85rem', height: '36px' }}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  disabled={!results}
-                />
-              </div>
+              {/* Card Main Body Layout */}
+              <div style={{ display: 'flex', gap: '1rem', flex: 1, minHeight: 0 }}>
 
-              {/* Scrollable table container */}
-              <div style={{
-                flex: 1,
-                overflowY: 'auto',
-                border: '1px solid var(--border-color)',
-                borderRadius: '8px',
-                background: 'rgba(0, 0, 0, 0.1)',
-                display: (!results || filteredItems.length === 0) ? 'flex' : 'block',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                {!results ? (
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1.5rem', fontStyle: 'italic' }}>
-                    No Data (Run algorithm to view what's in customers' carts)
+                {/* Left Panel: Product List with Clickable Rows */}
+                <div style={{ flex: '1 1 50%', display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+                  <div style={{ position: 'relative', marginBottom: '0.5rem' }}>
+                    <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+                    <input
+                      type="text"
+                      placeholder="Search"
+                      className="input"
+                      style={{ paddingLeft: '30px', paddingItem: '0.4rem', fontSize: '0.85rem', height: '34px' }}
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      disabled={!stats.all_items || stats.all_items.length === 0}
+                    />
                   </div>
-                ) : filteredItems.length === 0 ? (
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '130px', padding: '1.5rem', textAlign: 'center' }}>
-                    No matching products found.
+
+                  <div style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    background: 'rgba(0, 0, 0, 0.1)',
+                    display: (!stats.all_items || stats.all_items.length === 0 || filteredItems.length === 0) ? 'flex' : 'block',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {!stats.all_items || stats.all_items.length === 0 ? (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1.5rem', fontStyle: 'italic' }}>
+                        No Data (Upload a dataset to view customer cart frequency)
+                      </div>
+                    ) : filteredItems.length === 0 ? (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '130px', padding: '1.5rem', textAlign: 'center' }}>
+                        No matching products found.
+                      </div>
+                    ) : (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--card-bg, #1e222d)' }}>
+                          <tr style={{ background: 'rgba(255, 255, 255, 0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ textAlign: 'left', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>Product Name</th>
+                            <th style={{ textAlign: 'right', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>How Often Bought</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredItems.map(item => {
+                            const isSelected = selectedProduct === item.name;
+                            return (
+                              <tr
+                                key={item.name}
+                                onClick={() => handleSelectProduct(item.name)}
+                                style={{
+                                  borderBottom: '1px solid rgba(255, 255, 255, 0.02)',
+                                  cursor: 'pointer',
+                                  background: isSelected ? 'rgba(59, 130, 246, 0.18)' : 'transparent',
+                                  borderLeft: isSelected ? '3px solid var(--primary-color)' : '3px solid transparent',
+                                  transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                }}
+                              >
+                                <td style={{ padding: '0.45rem 0.75rem', fontWeight: isSelected ? '700' : '600', color: isSelected ? '#3b82f6' : '#fff' }}>
+                                  {item.name}
+                                </td>
+                                <td className="mono" style={{ textAlign: 'right', padding: '0.45rem 0.75rem', color: 'var(--text-muted)' }}>
+                                  <strong style={{ color: isSelected ? '#3b82f6' : '#fff', fontWeight: '700' }}>{(item.support * 100).toFixed(1)}%</strong>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-color)' }}>
-                        <th style={{ textAlign: 'left', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>Product Name</th>
-                        <th style={{ textAlign: 'right', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>How Often Bought</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredItems.map(item => (
-                        <tr key={item.name} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)' }}>
-                          <td style={{ padding: '0.5rem 0.75rem', fontWeight: '600', color: '#fff' }}>{item.name}</td>
-                          <td className="mono" style={{ textAlign: 'right', padding: '0.5rem 0.75rem', color: 'var(--text-muted)' }}>
-                            <strong style={{ color: '#fff', fontWeight: '700' }}>{(item.support * 100).toFixed(1)}%</strong>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                </div>
+
+                {/* Right Panel: Frequently Bought Together Table Container */}
+                <div style={{
+                  flex: '1 1 50%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minWidth: 0,
+                  minHeight: 0,
+                  borderLeft: '1px solid var(--border-color)',
+                  paddingLeft: '1rem'
+                }}>
+                  {!selectedProduct ? (
+                    <div style={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '1.5rem',
+                      textAlign: 'center',
+                      border: '1px dashed var(--border-color)',
+                      borderRadius: '8px',
+                      background: 'rgba(0, 0, 0, 0.05)',
+                      color: 'var(--text-dim)'
+                    }}>
+                      <ShoppingCart size={28} style={{ color: 'var(--primary-color)', opacity: 0.6, marginBottom: '0.5rem' }} />
+                      <div style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                        Frequently Bought Together
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', maxWidth: '210px' }}>
+                        Click any product in the left table to reveal items co-purchased with it.
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.4rem', overflow: 'hidden' }}>
+                          <ShoppingCart size={15} style={{ color: 'var(--primary-color)', flexShrink: 0 }} />
+                          <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                            Frequently Bought Together with <span style={{ color: 'var(--primary-color)' }}>{selectedProduct}</span>
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => { setSelectedProduct(null); setCoBoughtResults([]); }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            padding: '2px 4px',
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                          title="Clear selection"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      {/* Scrollable container with vertical right-side scrollbar */}
+                      <div style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        background: 'rgba(0, 0, 0, 0.1)',
+                        minHeight: 0
+                      }}>
+                        {loadingCoBought ? (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                            <RefreshCw size={14} className="spin" /> Calculating co-occurrences...
+                          </div>
+                        ) : coBoughtResults.length === 0 ? (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1.5rem', fontStyle: 'italic' }}>
+                            No associated products found for "{selectedProduct}" in this dataset.
+                          </div>
+                        ) : (
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                            <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--card-bg, #1e222d)' }}>
+                              <tr style={{ background: 'rgba(255, 255, 255, 0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                                <th style={{ textAlign: 'center', padding: '0.5rem 0.5rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', width: '30px' }}>#</th>
+                                <th style={{ textAlign: 'left', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>Product Name</th>
+                                <th style={{ textAlign: 'right', padding: '0.5rem 0.75rem', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>How many times they bought together</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {coBoughtResults.map((item, idx) => (
+                                <tr key={item.product_name} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)' }}>
+                                  <td style={{ textAlign: 'center', padding: '0.45rem 0.5rem', color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.75rem' }}>{idx + 1}</td>
+                                  <td style={{ padding: '0.45rem 0.75rem', fontWeight: '600', color: '#fff' }}>{item.product_name}</td>
+                                  <td className="mono" style={{ textAlign: 'right', padding: '0.45rem 0.75rem', color: 'var(--text-muted)' }}>
+                                    <strong style={{ color: 'var(--primary-color)', fontWeight: '700' }}>{item.count}</strong>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
 
@@ -1148,40 +1337,77 @@ const Analytics = () => {
                 )
               )}
 
-              {/* Sub Tab Selector */}
-              <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', gap: '1.5rem' }}>
-                <button
-                  onClick={() => setActiveSubTab('recommendations')}
-                  style={{
-                    padding: '0.75rem 0.5rem',
-                    border: 'none',
-                    background: 'transparent',
-                    color: activeSubTab === 'recommendations' ? 'var(--primary-color)' : 'var(--text-muted)',
-                    borderBottom: activeSubTab === 'recommendations' ? '2px solid var(--primary-color)' : 'none',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    outline: 'none'
-                  }}
-                >
-                  Recommendations ({consolidatedRules.length})
-                </button>
-                <button
-                  onClick={() => setActiveSubTab('itemsets')}
-                  style={{
-                    padding: '0.75rem 0.5rem',
-                    border: 'none',
-                    background: 'transparent',
-                    color: activeSubTab === 'itemsets' ? 'var(--primary-color)' : 'var(--text-muted)',
-                    borderBottom: activeSubTab === 'itemsets' ? '2px solid var(--primary-color)' : 'none',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    outline: 'none'
-                  }}
-                >
-                  Common Item Combos ({results?.frequent_itemsets?.length || 0})
-                </button>
+              {/* Sub Tab Selector with Search Bar */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '1.5rem' }}>
+                  <button
+                    onClick={() => setActiveSubTab('recommendations')}
+                    style={{
+                      padding: '0.75rem 0.5rem',
+                      border: 'none',
+                      background: 'transparent',
+                      color: activeSubTab === 'recommendations' ? 'var(--primary-color)' : 'var(--text-muted)',
+                      borderBottom: activeSubTab === 'recommendations' ? '2px solid var(--primary-color)' : 'none',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      outline: 'none'
+                    }}
+                  >
+                    Recommendations ({filteredConsolidatedRules.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveSubTab('itemsets')}
+                    style={{
+                      padding: '0.75rem 0.5rem',
+                      border: 'none',
+                      background: 'transparent',
+                      color: activeSubTab === 'itemsets' ? 'var(--primary-color)' : 'var(--text-muted)',
+                      borderBottom: activeSubTab === 'itemsets' ? '2px solid var(--primary-color)' : 'none',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      outline: 'none'
+                    }}
+                  >
+                    Common Item Combos ({totalFilteredItemsetsCount})
+                  </button>
+                </div>
+
+                {/* Recommendations Search Bar */}
+                <div style={{ position: 'relative', width: '250px', marginBottom: '0.4rem' }}>
+                  <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+                  <input
+                    type="text"
+                    placeholder="Search product recommendations..."
+                    className="input"
+                    style={{ paddingLeft: '30px', paddingRight: '28px', fontSize: '0.85rem', height: '34px', width: '100%' }}
+                    value={recommendationSearchTerm}
+                    onChange={(e) => setRecommendationSearchTerm(e.target.value)}
+                    disabled={!results}
+                  />
+                  {recommendationSearchTerm && (
+                    <button
+                      onClick={() => setRecommendationSearchTerm('')}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '2px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      title="Clear search"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={{
@@ -1190,7 +1416,7 @@ const Analytics = () => {
                 border: '1px solid var(--border-color)',
                 borderRadius: '8px',
                 background: 'rgba(0, 0, 0, 0.1)',
-                display: (!results || (activeSubTab === 'recommendations' && consolidatedRules.length === 0) || (activeSubTab === 'itemsets' && groupedSets.length === 0)) ? 'flex' : 'block',
+                display: (!results || (activeSubTab === 'recommendations' && filteredConsolidatedRules.length === 0) || (activeSubTab === 'itemsets' && filteredGroupedSets.length === 0)) ? 'flex' : 'block',
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center'
@@ -1207,7 +1433,7 @@ const Analytics = () => {
                   <>
                     {activeSubTab === 'recommendations' && (
                       <>
-                        {consolidatedRules.length > 0 ? (
+                        {filteredConsolidatedRules.length > 0 ? (
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                             <thead>
                               <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-color)' }}>
@@ -1229,7 +1455,7 @@ const Analytics = () => {
                               </tr>
                             </thead>
                             <tbody>
-                              {consolidatedRules.map((suggestion, idx) => {
+                              {filteredConsolidatedRules.map((suggestion, idx) => {
                                 const confidencePct = (suggestion.confidence * 100).toFixed(1);
                                 const isHighConfidence = suggestion.confidence >= 0.8;
                                 const isMediumConfidence = suggestion.confidence >= 0.5 && suggestion.confidence < 0.8;
@@ -1508,9 +1734,9 @@ const Analytics = () => {
 
                     {activeSubTab === 'itemsets' && (
                       <>
-                        {groupedSets.length > 0 ? (
+                        {filteredGroupedSets.length > 0 ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.50rem', padding: '0.5rem' }}>
-                            {groupedSets.map(group => (
+                            {filteredGroupedSets.map(group => (
                               <div key={group.size} style={{
                                 border: '1px solid var(--border-color)',
                                 borderRadius: '8px',

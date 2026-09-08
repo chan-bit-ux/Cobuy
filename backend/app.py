@@ -366,8 +366,44 @@ def login():
         return jsonify({'error': 'Email and password are required'}), 400
 
     user_info = db.get_user(email)
-    if not user_info or user_info['password'] != password:
+    if not user_info:
         return jsonify({'error': 'Invalid email or password'}), 401
+
+    # Check lockout status first
+    lockout_info = db.get_user_lockout_info(email)
+    if lockout_info and lockout_info['is_locked']:
+        rem_sec = lockout_info['remaining_seconds']
+        rem_min = max(1, (rem_sec + 59) // 60)
+        return jsonify({
+            'error': f'Account temporarily locked. Please try again after {rem_min} minute{"s" if rem_min > 1 else ""}.',
+            'is_locked': True,
+            'remaining_seconds': rem_sec,
+            'locked_until': lockout_info['locked_until']
+        }), 423
+
+    # Check password
+    if user_info['password'] != password:
+        failed_res = db.record_failed_login(email)
+        if failed_res and failed_res['is_locked']:
+            return jsonify({
+                'error': failed_res['message'],
+                'is_locked': True,
+                'remaining_seconds': failed_res['remaining_seconds'],
+                'locked_until': failed_res['locked_until'],
+                'failed_attempts': failed_res['failed_attempts']
+            }), 423
+        elif failed_res:
+            return jsonify({
+                'error': failed_res['message'],
+                'is_locked': False,
+                'attempts_remaining': failed_res['attempts_remaining'],
+                'failed_attempts': failed_res['failed_attempts']
+            }), 401
+        else:
+            return jsonify({'error': 'Invalid email or password'}), 401
+
+    # Password is correct: reset lockout state
+    db.reset_user_lockout(email)
 
     store_id   = _get_store_id_for_user(user_info)
     store_name = None
@@ -392,6 +428,20 @@ def login():
             'store_name':   store_name
         }
     })
+
+@app.route('/api/admin/unlock-account', methods=['POST'])
+def unlock_account():
+    params = request.json or {}
+    email = params.get('email', '').strip().lower()
+    if not email:
+        return jsonify({'error': 'User email is required'}), 400
+
+    user = db.get_user(email)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    db.unlock_user_account(email)
+    return jsonify({'message': f'Account {email} has been unlocked successfully.'})
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -680,6 +730,85 @@ def mine_rules():
         rules = best_rules
         execution_time = time.time() - start_time
 
+        if rules.empty and transactions:
+            # Fallback 1: Derive rules from multi-item frequent itemsets
+            derived_list = []
+            if not frequent_itemsets.empty:
+                item_supp_map = {}
+                for _, r_item in frequent_itemsets.iterrows():
+                    its = list(r_item['itemsets'])
+                    if len(its) == 1:
+                        item_supp_map[its[0]] = r_item['support']
+                for _, r_item in frequent_itemsets.iterrows():
+                    its = list(r_item['itemsets'])
+                    if len(its) >= 2:
+                        sup = r_item['support']
+                        for i in range(len(its)):
+                            for j in range(len(its)):
+                                if i != j:
+                                    ant_name = its[i]
+                                    cons_name = its[j]
+                                    ant_sup = item_supp_map.get(ant_name, sup)
+                                    cons_sup = item_supp_map.get(cons_name, sup)
+                                    conf = sup / ant_sup if ant_sup > 0 else 0.0
+                                    lift = conf / cons_sup if cons_sup > 0 else 1.0
+                                    derived_list.append({
+                                        'antecedents': frozenset([ant_name]),
+                                        'consequents': frozenset([cons_name]),
+                                        'support': sup,
+                                        'confidence': conf,
+                                        'lift': lift,
+                                        'leverage': 0.0,
+                                        'conviction': 1.0
+                                    })
+            if derived_list:
+                rules = pd.DataFrame(derived_list).sort_values(by=['confidence', 'support'], ascending=[False, False])
+            else:
+                # Fallback 2: Direct co-occurrence pair rule synthesis
+                total_tx = len(transactions)
+                pair_counts = {}
+                item_counts = {}
+                for tx in transactions:
+                    unique_tx = set([str(it).strip() for it in tx if it])
+                    for it in unique_tx:
+                        item_counts[it] = item_counts.get(it, 0) + 1
+                    tx_items = sorted(list(unique_tx))
+                    for i in range(len(tx_items)):
+                        for j in range(i+1, len(tx_items)):
+                            pair = (tx_items[i], tx_items[j])
+                            pair_counts[pair] = pair_counts.get(pair, 0) + 1
+                
+                co_rules = []
+                for (a, b), cnt in pair_counts.items():
+                    sup_ab = cnt / total_tx
+                    sup_a = item_counts[a] / total_tx
+                    sup_b = item_counts[b] / total_tx
+                    conf_ab = cnt / item_counts[a]
+                    conf_ba = cnt / item_counts[b]
+                    lift_ab = conf_ab / sup_b if sup_b > 0 else 1.0
+                    lift_ba = conf_ba / sup_a if sup_a > 0 else 1.0
+                    
+                    co_rules.append({
+                        'antecedents': frozenset([a]),
+                        'consequents': frozenset([b]),
+                        'support': sup_ab,
+                        'confidence': conf_ab,
+                        'lift': lift_ab,
+                        'leverage': 0.0,
+                        'conviction': 1.0
+                    })
+                    co_rules.append({
+                        'antecedents': frozenset([b]),
+                        'consequents': frozenset([a]),
+                        'support': sup_ab,
+                        'confidence': conf_ba,
+                        'lift': lift_ba,
+                        'leverage': 0.0,
+                        'conviction': 1.0
+                    })
+                if co_rules:
+                    rules = pd.DataFrame(co_rules).sort_values(by=['confidence', 'support'], ascending=[False, False]).head(50)
+
         if rules.empty:
             metrics = {
                 'execution_time': execution_time,
@@ -892,12 +1021,17 @@ def get_stats():
         })
         
     item_counts = pd.Series(basket_items).value_counts().to_dict()
+    total_items_sold = sum(item_counts.values()) or 1
     
     formatted_all_items = [
         {
             'name': k, 
-            'value': int(v), 
-            'support': float(v) / total_transactions
+            'value': int(v),
+            'count': int(v),
+            'quantity': int(v),
+            'support': float(v) / total_transactions,
+            'quantity_share': round((float(v) / total_items_sold) * 100, 1),
+            'transaction_share': round((float(v) / total_transactions) * 100, 1)
         } 
         for k, v in item_counts.items()
     ]
@@ -909,10 +1043,51 @@ def get_stats():
         'active': True,
         'dataset_id': dataset_id,
         'total_transactions': total_transactions,
+        'total_units_sold': total_items_sold,
         'unique_items_count': unique_items_count,
         'top_items': formatted_all_items[:10],
         'all_items': formatted_all_items,
         'recommended_algorithm': recommended
+    })
+
+@app.route('/api/frequently_bought_together', methods=['GET'])
+def get_frequently_bought_together():
+    selected_product = request.args.get('product')
+    dataset_id = request.args.get('dataset_id')
+    user_email = get_current_user_email()
+
+    if not selected_product:
+        return jsonify({
+            'selected_product': '',
+            'frequently_bought_together': []
+        })
+
+    transactions = db.get_transactions(user_email=user_email, dataset_id=dataset_id)
+    if transactions is None or len(transactions) == 0:
+        return jsonify({
+            'selected_product': selected_product,
+            'frequently_bought_together': []
+        })
+
+    co_counts = {}
+    target_clean = selected_product.strip()
+    
+    for tx in transactions:
+        tx_items = [str(item).strip() for item in tx if item]
+        if any(item.lower() == target_clean.lower() for item in tx_items):
+            distinct_others = set([item for item in tx_items if item.lower() != target_clean.lower()])
+            for other in distinct_others:
+                co_counts[other] = co_counts.get(other, 0) + 1
+
+    results = [
+        {'product_name': name, 'count': count}
+        for name, count in co_counts.items()
+    ]
+    results.sort(key=lambda x: (-x['count'], x['product_name'].lower()))
+
+    return jsonify({
+        'selected_product': selected_product,
+        'frequently_bought_together': results
     })
 
 @app.route('/api/add_transaction', methods=['POST'])
@@ -997,9 +1172,19 @@ def load_template():
 
 @app.route('/api/datasets', methods=['GET'])
 def get_datasets():
+    show_all = request.args.get('all') == 'true'
+    user_info = get_current_user()
+    store_id = _get_store_id_for_user(user_info)
     user_email = get_current_user_email()
-    db.cleanup_duplicate_datasets(user_email=user_email)
-    datasets = db.get_datasets(user_email=user_email)
+    
+    if show_all:
+        if store_id:
+            datasets = db.get_datasets_by_store(store_id)
+        else:
+            datasets = db.get_datasets(user_email=user_email)
+    else:
+        db.cleanup_duplicate_datasets(user_email=user_email)
+        datasets = db.get_datasets(user_email=user_email)
     return jsonify({'datasets': datasets})
 
 @app.route('/api/datasets/<int:dataset_id>', methods=['DELETE'])

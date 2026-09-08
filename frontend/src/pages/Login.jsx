@@ -217,6 +217,35 @@ const Login = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Security & Lockout state
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutRemainingSeconds, setLockoutRemainingSeconds] = useState(0);
+  const [attemptsRemaining, setAttemptsRemaining] = useState(null);
+
+  // Real-time lockout countdown timer
+  React.useEffect(() => {
+    let timer;
+    if (isLocked && lockoutRemainingSeconds > 0) {
+      timer = setInterval(() => {
+        setLockoutRemainingSeconds((prev) => {
+          if (prev <= 1) {
+            setIsLocked(false);
+            setError('');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isLocked, lockoutRemainingSeconds]);
+
+  const formatLockoutTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const validateForm = () => {
     if (!email || !email.includes('@')) {
       setError('Please enter a valid email address.');
@@ -255,11 +284,24 @@ const Login = ({ onLogin }) => {
         }, 1200);
       } else {
         const response = await axios.post(`${API_BASE}/login`, { email, password });
+        setIsLocked(false);
+        setAttemptsRemaining(null);
         onLogin(response.data.token, response.data.user);
       }
     } catch (err) {
       console.error('Auth error:', err);
-      setError(err.response?.data?.error || 'Something went wrong. Please try again.');
+      const errData = err.response?.data;
+      if (errData?.is_locked) {
+        setIsLocked(true);
+        setLockoutRemainingSeconds(errData.remaining_seconds || 600);
+        setError(errData.error || 'Account temporarily locked.');
+        setAttemptsRemaining(null);
+      } else if (errData?.attempts_remaining !== undefined) {
+        setAttemptsRemaining(errData.attempts_remaining);
+        setError(errData.error || 'Incorrect password.');
+      } else {
+        setError(errData?.error || 'Something went wrong. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -417,13 +459,53 @@ const Login = ({ onLogin }) => {
 
         {/* Alerts */}
         <AnimatePresence mode="wait">
-          {error && (
+          {isLocked ? (
             <motion.div
+              key="lockout-alert"
               initial={{ opacity: 0, height: 0, y: -10 }}
               animate={{ opacity: 1, height: 'auto', y: 0 }}
               exit={{ opacity: 0, height: 0, y: -10 }}
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.75rem',
+                display: 'flex', flexDirection: 'column', gap: '0.5rem',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                padding: '0.875rem 1rem', borderRadius: '8px',
+                marginBottom: '1.25rem', color: '#ef4444',
+                fontSize: '0.85rem'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 600 }}>
+                <Clock size={18} style={{ flexShrink: 0 }} />
+                <span>Account Temporarily Locked</span>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#f87171', lineHeight: 1.4 }}>
+                {error || 'Too many failed login attempts.'}
+              </div>
+              <div style={{
+                marginTop: '0.25rem',
+                padding: '0.4rem 0.6rem',
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.82rem'
+              }}>
+                <span>Time remaining:</span>
+                <strong style={{ color: '#fca5a5', fontSize: '0.95rem' }}>
+                  {formatLockoutTime(lockoutRemainingSeconds)}
+                </strong>
+              </div>
+            </motion.div>
+          ) : error ? (
+            <motion.div
+              key="error-alert"
+              initial={{ opacity: 0, height: 0, y: -10 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -10 }}
+              style={{
+                display: 'flex', flexDirection: 'column', gap: '0.35rem',
                 backgroundColor: 'rgba(239, 68, 68, 0.08)',
                 border: '1px solid rgba(239, 68, 68, 0.15)',
                 padding: '0.75rem 1rem', borderRadius: '8px',
@@ -431,12 +513,26 @@ const Login = ({ onLogin }) => {
                 fontSize: '0.85rem', overflow: 'hidden'
               }}
             >
-              <ShieldAlert size={16} style={{ flexShrink: 0 }} />
-              <span>{error}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <ShieldAlert size={16} style={{ flexShrink: 0 }} />
+                <span>{error}</span>
+              </div>
+              {attemptsRemaining !== null && attemptsRemaining > 0 && (
+                <div style={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: '#f59e0b',
+                  marginTop: '0.2rem',
+                  paddingLeft: '1.75rem'
+                }}>
+                  ⚠️ {attemptsRemaining} attempt{attemptsRemaining === 1 ? '' : 's'} remaining before lockout
+                </div>
+              )}
             </motion.div>
-          )}
+          ) : null}
           {success && (
             <motion.div
+              key="success-alert"
               initial={{ opacity: 0, height: 0, y: -10 }}
               animate={{ opacity: 1, height: 'auto', y: 0 }}
               exit={{ opacity: 0, height: 0, y: -10 }}
@@ -506,6 +602,7 @@ const Login = ({ onLogin }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isLocked}
                 autoComplete="off"
                 className="input"
               />
@@ -520,6 +617,7 @@ const Login = ({ onLogin }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLocked}
                   autoComplete="new-password"
                   className="input"
                   style={{ paddingRight: '44px' }}
@@ -642,15 +740,17 @@ const Login = ({ onLogin }) => {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || isLocked}
             className="btn btn-primary"
-            style={{ width: '100%', marginTop: '0.75rem', height: '46px' }}
+            style={{ width: '100%', marginTop: '0.75rem', height: '46px', opacity: isLocked ? 0.7 : 1 }}
           >
             {isLoading ? (
               <div className="spin" style={{
                 width: '18px', height: '18px', borderRadius: '50%',
                 border: '2px solid var(--bg-color)', borderTopColor: 'transparent'
               }} />
+            ) : isLocked ? (
+              'Account Locked'
             ) : (
               isRegister ? 'Create Account' : 'Sign In'
             )}
