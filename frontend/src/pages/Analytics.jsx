@@ -29,7 +29,8 @@ import {
   BookOpen,
   CheckCircle2,
   Cpu,
-  Layers
+  Layers,
+  Loader2
 } from 'lucide-react';
 
 import {
@@ -42,7 +43,7 @@ import {
 const API_BASE = 'http://localhost:5000/api';
 
 const Analytics = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const datasetId = searchParams.get('dataset_id') || localStorage.getItem('activeDatasetId');
   const activeDatasetName = localStorage.getItem('activeDatasetName');
 
@@ -53,6 +54,12 @@ const Analytics = () => {
   const [uploadStatus, setUploadStatus] = useState(() => {
     const savedName = sessionStorage.getItem('analytics_file_name');
     return savedName ? 'success' : 'idle';
+  });
+  const [uploadError, setUploadError] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [isEmptyUpload, setIsEmptyUpload] = useState(() => {
+    const saved = sessionStorage.getItem('analytics_is_empty_upload');
+    return saved === 'true';
   });
   const [miningStatus, setMiningStatus] = useState(() => {
     const saved = sessionStorage.getItem('analytics_results');
@@ -411,11 +418,22 @@ const Analytics = () => {
   };
 
   const fetchStats = async (overrideDatasetId = null) => {
+    setLoadingStats(true);
     try {
       const targetId = overrideDatasetId || datasetId;
       const url = targetId ? `${API_BASE}/stats?dataset_id=${targetId}` : `${API_BASE}/stats`;
       const response = await axios.get(url);
       setStats(response.data);
+
+      if (response.data && response.data.active && (response.data.is_empty || response.data.total_transactions === 0)) {
+        setIsEmptyUpload(true);
+      } else if (response.data && response.data.total_transactions > 0) {
+        setIsEmptyUpload(false);
+        sessionStorage.removeItem('analytics_is_empty_upload');
+      } else if (response.data && !response.data.active) {
+        setIsEmptyUpload(false);
+        sessionStorage.removeItem('analytics_is_empty_upload');
+      }
 
       if (targetId) {
         try {
@@ -433,6 +451,9 @@ const Analytics = () => {
       console.error('Error fetching stats:', err);
       localStorage.removeItem('activeDatasetId');
       localStorage.removeItem('activeDatasetName');
+      setIsEmptyUpload(false);
+    } finally {
+      setLoadingStats(false);
     }
   };
 
@@ -477,8 +498,13 @@ const Analytics = () => {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
 
+    // Reset input value so selecting the same file again triggers onChange
+    e.target.value = '';
+
     setFile(selectedFile);
     setUploadStatus('uploading');
+    setUploadError(null);
+    setDuplicateNotice(null);
     sessionStorage.setItem('analytics_file_name', selectedFile.name);
 
     const formData = new FormData();
@@ -486,7 +512,6 @@ const Analytics = () => {
 
     try {
       const response = await axios.post(`${API_BASE}/upload`, formData);
-      setUploadStatus('success');
       if (response.data.dataset_id) {
         localStorage.setItem('activeDatasetId', response.data.dataset_id);
         localStorage.setItem('activeDatasetName', selectedFile.name);
@@ -496,6 +521,13 @@ const Analytics = () => {
       } else {
         setDuplicateNotice(null);
       }
+      if (response.data.is_empty || response.data.transaction_count === 0) {
+        setIsEmptyUpload(true);
+        sessionStorage.setItem('analytics_is_empty_upload', 'true');
+      } else {
+        setIsEmptyUpload(false);
+        sessionStorage.removeItem('analytics_is_empty_upload');
+      }
       if (response.data.cleaning_stats) {
         setCleaningStats(response.data.cleaning_stats);
         sessionStorage.setItem('analytics_cleaning_stats', JSON.stringify(response.data.cleaning_stats));
@@ -503,14 +535,19 @@ const Analytics = () => {
         setCleaningStats(null);
         sessionStorage.removeItem('analytics_cleaning_stats');
       }
-      fetchStats(response.data.dataset_id);
+      await fetchStats(response.data.dataset_id);
       setResults(null);
       setMiningStatus('idle');
       sessionStorage.removeItem('analytics_results');
+      setUploadStatus('success');
     } catch (err) {
       setUploadStatus('error');
+      const errDetail = err.response?.data?.error || 'Failed to upload file. Please check file format and try again.';
+      setUploadError(errDetail);
       sessionStorage.removeItem('analytics_file_name');
       sessionStorage.removeItem('analytics_cleaning_stats');
+      sessionStorage.removeItem('analytics_is_empty_upload');
+      setIsEmptyUpload(false);
       console.error(err);
     }
   };
@@ -523,7 +560,9 @@ const Analytics = () => {
       await axios.post(`${API_BASE}/clear`);
       setFile(null);
       setUploadStatus('idle');
+      setUploadError(null);
       setDuplicateNotice(null);
+      setIsEmptyUpload(false);
       setResults(null);
       setMiningStatus('idle');
       setCleaningStats(null);
@@ -532,8 +571,10 @@ const Analytics = () => {
       sessionStorage.removeItem('analytics_file_name');
       sessionStorage.removeItem('analytics_cleaning_stats');
       sessionStorage.removeItem('analytics_results');
+      sessionStorage.removeItem('analytics_is_empty_upload');
       localStorage.removeItem('activeDatasetId');
       localStorage.removeItem('activeDatasetName');
+      setSearchParams({}, { replace: true });
       setStats({
         active: false,
         total_transactions: 0,
@@ -768,7 +809,7 @@ const Analytics = () => {
   const totalFilteredItemsetsCount = filteredGroupedSets.reduce((sum, group) => sum + group.items.length, 0);
 
 
-  const hasActiveSource = Boolean(file || datasetId || stats.active);
+  const hasActiveSource = Boolean((file || datasetId) && (stats.active || stats.total_transactions > 0 || uploadStatus === 'uploading'));
   const isRunActive = miningStatus === 'success' || !!results;
 
   return (
@@ -812,7 +853,7 @@ const Analytics = () => {
               <Database size={16} /> Data Setup
             </h3>
 
-            {(datasetId || activeDatasetName) && (
+            {hasActiveSource && (datasetId || activeDatasetName) && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -847,92 +888,155 @@ const Analytics = () => {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: isRunActive ? 'not-allowed' : 'pointer',
+                  cursor: (isRunActive || uploadStatus === 'uploading') ? 'not-allowed' : 'pointer',
                   opacity: isRunActive ? 0.5 : 1,
                   background: file ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
                   transition: 'var(--transition)',
                   marginBottom: '0.5rem',
                   width: '100%',
                   boxSizing: 'border-box',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
+                  position: 'relative'
                 }}
-                title={isRunActive ? "Analysis already completed. Click 'Clear Session' to upload another file." : "Click to choose a CSV file"}
+                title={
+                  uploadStatus === 'uploading'
+                    ? 'Uploading...'
+                    : isRunActive
+                    ? "Analysis already completed. Click 'Clear Session' to upload another file."
+                    : "Click to choose a CSV file"
+                }
                 onClick={() => {
-                  if (!isRunActive) {
+                  if (!isRunActive && uploadStatus !== 'uploading') {
                     document.getElementById('file-upload').click();
                   }
                 }}
               >
                 <input
                   type="file" id="file-upload" hidden
-                  disabled={isRunActive}
+                  disabled={isRunActive || uploadStatus === 'uploading'}
                   onChange={handleFileUpload}
                   accept=".csv, .xlsx, .xls"
                 />
-                <Upload size={24} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem', flexShrink: 0 }} />
-                <div style={{
-                  fontSize: '0.85rem',
-                  fontWeight: '600',
-                  color: file ? '#fff' : 'var(--text-muted)',
-                  width: '100%',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  textAlign: 'center'
-                }}>
-                  {file ? file.name : 'Choose a CSV file'}
-                </div>
+                {uploadStatus === 'uploading' ? (
+                  <>
+                    <Loader2 size={24} className="spin" style={{ color: 'var(--text-muted)', marginBottom: '0.75rem', flexShrink: 0 }} />
+                    <div style={{
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      color: 'var(--text-muted)',
+                      width: '100%',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      textAlign: 'center'
+                    }}>
+                      Uploading...
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={24} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem', flexShrink: 0 }} />
+                    <div style={{
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      color: file ? '#fff' : 'var(--text-muted)',
+                      width: '100%',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      textAlign: 'center'
+                    }}>
+                      {file ? file.name : 'Choose a CSV file'}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div style={{ minHeight: '20px', marginBottom: '0.5rem' }}>
-                {hasActiveSource && stats.total_transactions > 0 && (
-                  <div style={{ color: '#10b981', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: '600' }}>
-                    <CheckCircle size={14} /> Ready to mine ({stats.total_transactions} transactions loaded)
-                  </div>
-                )}
-                {hasActiveSource && stats.total_transactions === 0 && (
+                {uploadStatus !== 'uploading' && loadingStats ? (
                   <div style={{
-                    marginTop: '0.5rem',
-                    background: 'rgba(245, 158, 11, 0.12)',
-                    border: '1px solid rgba(245, 158, 11, 0.35)',
-                    color: '#fbbf24',
-                    padding: '0.65rem 0.85rem',
-                    borderRadius: '8px',
-                    fontSize: '0.75rem',
-                    lineHeight: '1.5',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.5rem'
-                  }}>
-                    <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '2px', color: '#fbbf24' }} />
-                    <div>
-                      <strong>Warning:</strong> Uploaded file contains 0 valid transactions. Ready to run algorithm, but will yield 0 outputs.
-                    </div>
-                  </div>
-                )}
-                {duplicateNotice && (
-                  <div style={{
-                    marginTop: '0.75rem',
-                    background: 'rgba(245, 158, 11, 0.12)',
-                    border: '1px solid rgba(245, 158, 11, 0.3)',
-                    color: '#fbbf24',
-                    padding: '0.75rem 1rem',
-                    borderRadius: '8px',
+                    color: 'var(--text-muted)',
                     fontSize: '0.78rem',
-                    lineHeight: '1.5',
                     display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.6rem'
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    fontWeight: '500',
+                    padding: '0.25rem 0'
                   }}>
-                    <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#fbbf24' }} />
-                    <div>
-                      <strong>File Already in History:</strong> {duplicateNotice}
-                    </div>
+                    <Loader2 size={14} className="spin" /> Loading transaction stats...
                   </div>
+                ) : uploadStatus !== 'uploading' && (
+                  <>
+                    {hasActiveSource && stats.total_transactions > 0 && (
+                      <div style={{ color: '#10b981', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: '600' }}>
+                        <CheckCircle size={14} /> Ready to mine ({stats.total_transactions} transactions loaded)
+                      </div>
+                    )}
+                    {hasActiveSource && isEmptyUpload && stats.total_transactions === 0 && (
+                      <div style={{
+                        marginTop: '0.5rem',
+                        background: 'rgba(245, 158, 11, 0.12)',
+                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                        color: '#fbbf24',
+                        padding: '0.65rem 0.85rem',
+                        borderRadius: '8px',
+                        fontSize: '0.75rem',
+                        lineHeight: '1.5',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.5rem'
+                      }}>
+                        <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '2px', color: '#fbbf24' }} />
+                        <div>
+                          <strong>Warning:</strong> Uploaded file contains 0 valid transactions. Ready to run algorithm, but will yield 0 outputs.
+                        </div>
+                      </div>
+                    )}
+                    {duplicateNotice && (
+                      <div style={{
+                        marginTop: '0.75rem',
+                        background: 'rgba(245, 158, 11, 0.12)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        color: '#fbbf24',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        lineHeight: '1.5',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.6rem'
+                      }}>
+                        <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#fbbf24' }} />
+                        <div>
+                          <strong>File Already in History:</strong> {duplicateNotice}
+                        </div>
+                      </div>
+                    )}
+                    {uploadStatus === 'error' && uploadError && (
+                      <div style={{
+                        marginTop: '0.75rem',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#f87171',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        lineHeight: '1.5',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.6rem'
+                      }}>
+                        <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#f87171' }} />
+                        <div>
+                          <strong>Upload Failed:</strong> {uploadError}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
-              {uploadStatus === 'success' && cleaningStats && (
+              {uploadStatus !== 'uploading' && cleaningStats && (
                 <div style={{ marginTop: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', padding: '0.6rem 0.75rem', borderRadius: '6px', fontSize: '0.7rem', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
                   <div style={{ fontWeight: '700', marginBottom: '0.25rem', color: '#fff' }}>Sanitization Details:</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
@@ -1037,7 +1141,7 @@ const Analytics = () => {
                   </span>
                 </h3>
                 <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  Items: {stats.unique_items_count} | Purchases: {stats.total_transactions}
+                  {results ? `Items: ${stats.unique_items_count} | Purchases: ${stats.total_transactions}` : 'Run algorithm to view data'}
                 </span>
               </div>
 
@@ -1073,7 +1177,7 @@ const Analytics = () => {
                       style={{ paddingLeft: '30px', paddingItem: '0.4rem', fontSize: '0.85rem', height: '34px' }}
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      disabled={!stats.all_items || stats.all_items.length === 0}
+                      disabled={!results || !stats.all_items || stats.all_items.length === 0}
                     />
                   </div>
 
@@ -1083,13 +1187,17 @@ const Analytics = () => {
                     border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                     background: 'rgba(0, 0, 0, 0.1)',
-                    display: (!stats.all_items || stats.all_items.length === 0 || filteredItems.length === 0) ? 'flex' : 'block',
+                    display: (!results || !stats.all_items || stats.all_items.length === 0 || filteredItems.length === 0) ? 'flex' : 'block',
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}>
-                    {!stats.all_items || stats.all_items.length === 0 ? (
+                    {!results ? (
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1.5rem', fontStyle: 'italic' }}>
-                        No Data (Upload a dataset to view customer cart frequency)
+                        No Data (Run algorithm to view customer cart frequency)
+                      </div>
+                    ) : !stats.all_items || stats.all_items.length === 0 ? (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1.5rem', fontStyle: 'italic' }}>
+                        No products found in this dataset
                       </div>
                     ) : filteredItems.length === 0 ? (
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '130px', padding: '1.5rem', textAlign: 'center' }}>
@@ -1149,7 +1257,29 @@ const Analytics = () => {
                   borderLeft: '1px solid var(--border-color)',
                   paddingLeft: '1rem'
                 }}>
-                  {!selectedProduct ? (
+                  {!results ? (
+                    <div style={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '1.5rem',
+                      textAlign: 'center',
+                      border: '1px dashed var(--border-color)',
+                      borderRadius: '8px',
+                      background: 'rgba(0, 0, 0, 0.05)',
+                      color: 'var(--text-dim)'
+                    }}>
+                      <ShoppingCart size={28} style={{ color: 'var(--primary-color)', opacity: 0.6, marginBottom: '0.5rem' }} />
+                      <div style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                        Frequently Bought Together
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', maxWidth: '210px' }}>
+                        Run algorithm to explore frequently bought together items.
+                      </div>
+                    </div>
+                  ) : !selectedProduct ? (
                     <div style={{
                       flex: 1,
                       display: 'flex',
